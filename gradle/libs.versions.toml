@@ -1,0 +1,58 @@
+[versions]
+
+### region Library versions
+
+# Official Android libraries
+coreKtx = "1.16.0"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+espressoCore = "3.6.1"
+lifecycleRuntimeKtx = "2.9.0"
+lifecycleProcess = "2.9.0"
+lifecycleRuntimeCompose = "2.9.0"
+activityCompose = "1.10.1"
+composeBom = "2025.05.00"
+
+# Third-party libraries
+simpleStack = "2.9.0"
+simpleStackExtensions = "2.3.4"
+simpleStackCompose = "0.13.1"
+flowCombineTuple = "1.2.0"
+
+### endregion
+
+### Plugin versions.
+
+agp = "8.10.0"
+kotlin = "1.9.0"
+kotlinParcelize = "1.8.10"
+
+### endregion
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espressoCore = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-lifecycleProcess = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
+androidx-lifecycleRuntimeKtx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycleRuntimeCompose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
+androidx-activityCompose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-composeBom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-toolingPreview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-testManifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-testJunit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+simpleStack = { group = "com.github.Zhuinden", name = "simple-stack", version.ref = "simpleStack" }
+simpleStackExtensions = { group = "com.github.Zhuinden", name = "simple-stack-extensions", version.ref = "simpleStackExtensions" }
+simpleStackCompose = { group = "com.github.Zhuinden", name = "simple-stack-compose-integration", version.ref = "simpleStackCompose" }
+flowCombineTuple = { group = "com.github.Zhuinden", name = "flow-combinetuple-kt", version.ref = "flowCombineTuple" }
+
+[plugins]
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+jetbrainsKotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlinParcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlinParcelize" }
