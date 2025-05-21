@@ -117,22 +117,19 @@ fun DeviceScreen(
 				modifier = Modifier
 					.fillMaxWidth()
 			) {
+				Button(
+					onClick = {
+						onAction(HomeAction.SendMessage)
+					},
+				) {
+					Text("Send")
+				}
 				TextField(
 					value = state.enteredMessage,
 					onValueChange = { value ->
 						onAction(HomeAction.EnterMessage(value))
 					},
 				)
-				IconButton(
-					onClick = {
-						onAction(HomeAction.SendMessage)
-					}
-				) {
-					Icon(
-						imageVector = Icons.AutoMirrored.Filled.Send,
-						contentDescription = null,
-					)
-				}
 			}
 			Text("Device name: ${state.bluetoothDeviceName}")
 			Text("Connection state: ${state.connectionState}")
@@ -284,6 +281,8 @@ private fun BluetoothDeviceList(
 			Text(
 				text = message.content,
 				color = if (message.isFromLocalUser) Color.Blue else Color.Green,
+				modifier = Modifier
+					.padding(vertical = 6.dp)
 			)
 		}
 	}

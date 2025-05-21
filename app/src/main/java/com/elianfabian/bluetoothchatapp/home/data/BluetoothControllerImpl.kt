@@ -14,6 +14,8 @@ import com.elianfabian.bluetoothchatapp.chat.data.toBluetoothMessage
 import com.elianfabian.bluetoothchatapp.chat.data.toByteArray
 import com.elianfabian.bluetoothchatapp.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp.common.data.MainActivityHolder
+import com.elianfabian.bluetoothchatapp.common.util.getString
+import com.elianfabian.bluetoothchatapp.common.util.putString
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
 import com.zhuinden.simplestack.Bundleable
@@ -29,7 +31,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.nio.ByteBuffer
 import java.util.UUID
 
 @SuppressLint("MissingPermission")
@@ -192,15 +199,23 @@ class BluetoothControllerImpl(
 					_connectionState.value = BluetoothController.DeviceConnectionState.Connected
 					serverSocket.close()
 
-					clientSocket.listenForIncomingData().collect { data ->
-						println("$$$ serverData = ${data.contentToString()}")
+					clientSocket.listenForIncomingString().collect { data ->
+						println("$$$ serverData = ${data}")
 						if (data.isEmpty()) {
 							return@collect
 						}
-						val message = data.toBluetoothMessage(isFromLocalUser = false)
+						val message = BluetoothMessage(
+							senderName = clientSocket.remoteDevice.name,
+							content = data,
+							isFromLocalUser = false,
+						)
 						emit(
 							BluetoothController.ConnectionResult.Message(
-								message = message,
+								message = message ?: BluetoothMessage(
+									content = "ERROR: FAILED TO PARSE MESSAGE",
+									senderName = "",
+									isFromLocalUser = false,
+								),
 							)
 						)
 					}
@@ -236,15 +251,23 @@ class BluetoothControllerImpl(
 					emit(BluetoothController.ConnectionResult.ConnectionEstablished)
 					_connectionState.value = BluetoothController.DeviceConnectionState.Connected
 
-					clientSocket.listenForIncomingData().collect { data ->
-						println("$$$ clientData = ${data.contentToString()}")
+					clientSocket.listenForIncomingString().collect { data ->
+						println("$$$ clientData = ${data}")
 						if (data.isEmpty()) {
 							return@collect
 						}
-						val message = data.toBluetoothMessage(isFromLocalUser = false)
+						val message = BluetoothMessage(
+							senderName = device.name,
+							content = data,
+							isFromLocalUser = false,
+						)
 						emit(
 							BluetoothController.ConnectionResult.Message(
-								message = message,
+								message = message ?: BluetoothMessage(
+									content = "ERROR: FAILED TO PARSE MESSAGE",
+									senderName = "",
+									isFromLocalUser = false,
+								),
 							)
 						)
 					}
@@ -266,21 +289,33 @@ class BluetoothControllerImpl(
 			return null
 		}
 
-		val adapter = _bluetoothAdapter ?: return null
-
-		val bluetoothMessage = BluetoothMessage(
-			content = message,
-			senderName = adapter.name ?: "",
-			isFromLocalUser = true,
-		)
-
-		val data = bluetoothMessage.toByteArray()
 		val clientSocket = _currentClientSocket ?: return null
-
-		if (!clientSocket.sendData(data)) {
-			return null
+		if (clientSocket.sendString(message)) {
+			return BluetoothMessage(
+				senderName = "",
+				content = message,
+				isFromLocalUser = true,
+			)
 		}
-		return bluetoothMessage
+
+		return null
+
+
+//		val adapter = _bluetoothAdapter ?: return null
+//
+//		val bluetoothMessage = BluetoothMessage(
+//			content = message,
+//			senderName = adapter.name ?: "",
+//			isFromLocalUser = true,
+//		)
+//
+//		val data = bluetoothMessage.toByteArray()
+//		val clientSocket = _currentClientSocket ?: return null
+//
+//		if (!clientSocket.sendData(data)) {
+//			return null
+//		}
+//		return bluetoothMessage
 	}
 
 	override fun closeConnection() {
@@ -317,37 +352,63 @@ class BluetoothControllerImpl(
 			return emptyFlow()
 		}
 		return flow {
-			val buffer = ByteArray(1024)
 			while (true) {
+				val buffer = ByteArray(32)
 				try {
 					inputStream.read(buffer)
 				}
 				catch (e: IOException) {
+					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
 					break
 				}
 
+				println("$$$ BluetoothControllerImpl.listenForIncomingData() buffer = ${buffer.contentToString()}")
 				emit(buffer)
 			}
 		}.flowOn(Dispatchers.IO)
 	}
 
-	private suspend fun BluetoothSocket.sendData(data: ByteArray): Boolean {
+	private fun BluetoothSocket.listenForIncomingString(): Flow<String> {
+		if (!isConnected) {
+			return emptyFlow()
+		}
+		return flow {
+			while (true) {
+				try {
+					val result = inputStream.readString()
+
+					emit(result.also {
+						println("$$$ stringOut = $it")
+					})
+				}
+				catch (e: IOException) {
+					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
+					break
+				}
+			}
+		}.flowOn(Dispatchers.IO)
+	}
+
+	private suspend fun BluetoothSocket.sendString(string: String): Boolean {
 		if (!isConnected) {
 			return false
 		}
+
+		println("$$$ sendString($string)")
+
 		return withContext(Dispatchers.IO) {
 			try {
-				outputStream.write(data)
+				outputStream.write(string.toByteArray())
+
+				return@withContext true
 			}
 			catch (e: IOException) {
+				println("$$$ sendString error: ${e.message}")
 				e.printStackTrace()
 				return@withContext false
 			}
-
-			return@withContext true
 		}
 	}
-
 
 	override fun onServiceRegistered() {
 		context.registerReceiver(
@@ -402,5 +463,41 @@ class BluetoothControllerImpl(
 	companion object {
 		private const val SdpRecordName = "chat_service"
 		private val SdpRecordUuid = UUID.fromString("114799bb-c135-4cd0-aa22-459ba09d1e82")
+
+		private object DataType {
+			const val String = 1
+		}
 	}
+}
+
+fun InputStream.readBytesFully(
+	bufferSize: Int = 256,
+): ByteArray {
+	val output = ByteArrayOutputStream()
+	val buffer = ByteArray(bufferSize)
+	var bytesRead: Int
+	do {
+		bytesRead = read(buffer)
+		if (bytesRead > 0) {
+			output.write(buffer, 0, bytesRead)
+		}
+	}
+	while (bytesRead != -1)
+	return output.toByteArray()
+}
+
+fun InputStream.readString(
+	bufferSize: Int = 256,
+): String = buildString {
+	val buffer = ByteArray(bufferSize)
+	var bytesRead: Int
+	do {
+		bytesRead = read(buffer)
+		if (bytesRead <= 0) {
+			break
+		}
+		val message = buffer.decodeToString(endIndex = bytesRead)
+		append(message)
+	}
+	while (available() != 0)
 }

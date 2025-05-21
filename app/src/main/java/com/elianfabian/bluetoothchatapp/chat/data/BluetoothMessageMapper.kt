@@ -17,9 +17,13 @@ fun BluetoothMessage.toByteArray(): ByteArray {
 
 fun ByteArray.toBluetoothMessage(
 	isFromLocalUser: Boolean,
-): BluetoothMessage {
-	val input = DataInputStream(ByteArrayInputStream(this))
-	val senderName = input.readUTF()
-	val message = input.readUTF()
-	return BluetoothMessage(senderName, message, isFromLocalUser)
+): BluetoothMessage? {
+	try {
+		val input = DataInputStream(ByteArrayInputStream(this))
+//		val senderName = input.readUTF()
+		val message = input.readBytes().contentToString()
+		return BluetoothMessage("OTHER", message, isFromLocalUser)
+	} catch (e: Exception) {
+		return null
+	}
 }
