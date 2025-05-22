@@ -22,14 +22,18 @@ import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.simplestack.ScopedServices
 import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -284,6 +288,40 @@ class BluetoothControllerImpl(
 		}.flowOn(Dispatchers.IO)
 	}
 
+	private suspend fun connectToDevice2(device: BluetoothDevice): Boolean {
+		if (!canEnableBluetooth) {
+			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
+		}
+
+		val adapter = _bluetoothAdapter ?: return false
+
+		return withContext(Dispatchers.IO) {
+			_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
+
+			val androidDevice = adapter.getRemoteDevice(device.address)
+//			if (androidDevice !in adapter.bondedDevices) {
+////				emit(BluetoothController.ConnectionResult.DeviceIsNotPaired)
+//				return@withContext false
+//			}
+
+			val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
+			_currentClientSocket = clientSocket
+
+			stopScan()
+
+			try {
+				clientSocket.connect()
+				_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
+				return@withContext true
+			}
+			catch (e: IOException) {
+				clientSocket.close()
+				_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
+				return@withContext false
+			}
+		}
+	}
+
 	override suspend fun trySendMessage(message: String): BluetoothMessage? {
 		if (!canEnableBluetooth) {
 			return null
@@ -372,17 +410,19 @@ class BluetoothControllerImpl(
 		if (!isConnected) {
 			return emptyFlow()
 		}
-		return flow {
-			while (true) {
+
+		return channelFlow {
+			while (isActive) {
 				try {
 					val result = inputStream.readString()
 
-					emit(result.also {
+					send(result.also {
 						println("$$$ stringOut = $it")
 					})
 				}
 				catch (e: IOException) {
 					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
+					this@channelFlow.close()
 					break
 				}
 			}
@@ -490,9 +530,8 @@ fun InputStream.readString(
 	bufferSize: Int = 256,
 ): String = buildString {
 	val buffer = ByteArray(bufferSize)
-	var bytesRead: Int
 	do {
-		bytesRead = read(buffer)
+		val bytesRead: Int = read(buffer)
 		if (bytesRead <= 0) {
 			break
 		}

@@ -1,6 +1,7 @@
 package com.elianfabian.bluetoothchatapp.home.presentation.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
@@ -27,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -210,7 +213,15 @@ private fun BluetoothDeviceList(
 	onPairedDeviceClick: (device: BluetoothDevice) -> Unit,
 	onScannedDeviceClick: (device: BluetoothDevice) -> Unit,
 ) {
+	val lazyListState = rememberLazyListState()
+	LaunchedEffect(state.messages) {
+		if (lazyListState.layoutInfo.totalItemsCount == 0) {
+			return@LaunchedEffect
+		}
+		lazyListState.scrollToItem(lazyListState.layoutInfo.totalItemsCount)
+	}
 	LazyColumn(
+		state = lazyListState,
 		verticalArrangement = Arrangement.spacedBy(3.dp),
 		modifier = modifier
 	) {
