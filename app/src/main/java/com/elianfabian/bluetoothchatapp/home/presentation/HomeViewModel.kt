@@ -10,7 +10,6 @@ import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -67,7 +66,7 @@ class HomeViewModel(
 		when (action) {
 			is HomeAction.StartScan -> {
 				registeredScope.launch {
-					executeIfSatisfyBluetoothRequirements {
+					executeIfBluetoothRequirementsAreSatisfied {
 						bluetoothController.startScan()
 					}
 				}
@@ -77,13 +76,18 @@ class HomeViewModel(
 			}
 			is HomeAction.StartServer -> {
 				registeredScope.launch {
-					executeIfSatisfyBluetoothRequirements {
-						bluetoothController.startBluetoothServer().collect { result ->
-							if (result is BluetoothController.ConnectionResult.Message) {
-								_messages.update {
-									it + result.message
+					executeIfBluetoothRequirementsAreSatisfied {
+						val result = bluetoothController.startBluetoothServer()
+						println("$$$ server-result = $result")
+						when (result) {
+							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
+								bluetoothController.listenMessages().collect { message ->
+									_messages.update {
+										it + message
+									}
 								}
 							}
+							else -> Unit
 						}
 					}
 				}
@@ -95,9 +99,7 @@ class HomeViewModel(
 				androidHelper.openDeviceInfoSettings()
 			}
 			is HomeAction.MakeDeviceDiscoverable -> {
-				androidHelper.makeDeviceDiscoverable {
-
-				}
+				androidHelper.makeDeviceDiscoverable {}
 			}
 			is HomeAction.SendMessage -> {
 				registeredScope.launch {
@@ -115,30 +117,40 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickPairedDevice -> {
 				registeredScope.launch {
-					bluetoothController.connectToDevice(action.device).collect { result ->
-						if (result is BluetoothController.ConnectionResult.Message) {
-							_messages.update {
-								it + result.message
+					val result = bluetoothController.connectToDevice(action.device)
+					println("$$$ connect-result = $result")
+					when (result) {
+						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
+							bluetoothController.listenMessages().collect { message ->
+								_messages.update {
+									it + message
+								}
 							}
 						}
+						else -> Unit
 					}
 				}
 			}
 			is HomeAction.ClickScannedDevice -> {
 				registeredScope.launch {
-					bluetoothController.connectToDevice(action.device).collect { result ->
-						if (result is BluetoothController.ConnectionResult.Message) {
-							_messages.update {
-								it + result.message
+					val result = bluetoothController.connectToDevice(action.device)
+					println("$$$ connect-result = $result")
+					when (result) {
+						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
+							bluetoothController.listenMessages().collect { message ->
+								_messages.update {
+									it + message
+								}
 							}
 						}
+						else -> Unit
 					}
 				}
 			}
 		}
 	}
 
-	private suspend fun executeIfSatisfyBluetoothRequirements(action: suspend () -> Unit) {
+	private suspend fun executeIfBluetoothRequirementsAreSatisfied(action: suspend () -> Unit) {
 		bluetoothPermissionController.request()
 		val result = bluetoothPermissionController.awaitResult()
 		if (result.values.all { it == PermissionState.PermanentlyDenied }) {

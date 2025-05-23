@@ -17,16 +17,15 @@ interface BluetoothController {
 	fun startScan()
 	fun stopScan()
 
-	fun startBluetoothServer(): Flow<ConnectionResult>
-	fun connectToDevice(device: BluetoothDevice): Flow<ConnectionResult>
+	suspend fun startBluetoothServer(): ConnectionResult
+	suspend fun connectToDevice(device: BluetoothDevice): ConnectionResult
+	fun listenMessages(): Flow<BluetoothMessage>
 
 	suspend fun trySendMessage(message: String): BluetoothMessage?
 
 
 
 	fun closeConnection()
-
-	fun release()
 
 	enum class BluetoothState {
 		On,
@@ -47,6 +46,5 @@ interface BluetoothController {
 		data object ConnectionEstablished : ConnectionResult
 		data object DeviceIsNotPaired : ConnectionResult
 		data object CouldNotConnect : ConnectionResult
-		data class Message(val message: BluetoothMessage) : ConnectionResult
 	}
 }

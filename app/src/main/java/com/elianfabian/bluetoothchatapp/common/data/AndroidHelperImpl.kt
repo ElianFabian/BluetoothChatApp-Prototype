@@ -12,9 +12,12 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import com.elianfabian.bluetoothchatapp.common.domain.AndroidHelper
 import androidx.core.net.toUri
+import androidx.fragment.app.FragmentActivity
 import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.CoroutineScope
@@ -24,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
 import java.util.UUID
-import kotlin.coroutines.resume
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -32,18 +34,16 @@ class AndroidHelperImpl(
 	private val context: Context,
 	private val applicationScope: CoroutineScope,
 	private val mainActivityHolder: MainActivityHolder,
-) : AndroidHelper,
-	Bundleable {
+) : AndroidHelper {
 
-	override val bluetoothName by secureSettingFlow(
+	private val activity: FragmentActivity get() = mainActivityHolder.mainActivity
+
+	override val bluetoothName by settingFlow(
 		context = context,
 		key = "bluetooth_name",
 		scope = applicationScope,
+		type = SettingFlowDelegate.Type.Secure,
 	)
-
-	private var _makeDeviceDiscoverableLauncherKey: String = UUID.randomUUID().toString()
-	private var _enableBluetoothLauncherKey: String = UUID.randomUUID().toString()
-
 
 	override fun showToast(message: String) {
 		Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -94,67 +94,55 @@ class AndroidHelperImpl(
 	}
 
 	override fun makeDeviceDiscoverable(callback: (accepted: Boolean) -> Unit) {
-		var cleanerCallback: (() -> Unit)? = null
-
-		val activity = mainActivityHolder.mainActivity
-		val launcher = activity.activityResultRegistry.register(
-			key = _makeDeviceDiscoverableLauncherKey,
-			contract = ActivityResultContracts.StartActivityForResult(),
-			callback = { result ->
-				val accepted = result.resultCode == Activity.RESULT_OK
-				callback(accepted)
-				cleanerCallback?.invoke()
-				cleanerCallback = null
-			}
-		)
-
-		val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-			putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-		}
-
-		launcher.launch(intent)
-
-		cleanerCallback = {
-			launcher.unregister()
-		}
-	}
-
-	override fun showEnableBluetoothDialog(callback: (enabled: Boolean) -> Unit) {
-		var cleanerCallback: (() -> Unit)? = null
-		val launcher = mainActivityHolder.mainActivity.activityResultRegistry.register(
-			key = _enableBluetoothLauncherKey,
+		val launcher = createLauncher(
 			contract = ActivityResultContracts.StartActivityForResult(),
 			callback = { result ->
 				callback(result.resultCode == Activity.RESULT_OK)
+			},
+		)
+		val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+			putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 60)
+		}
+		launcher.launch(intent)
+	}
+
+	override fun showEnableBluetoothDialog(callback: (enabled: Boolean) -> Unit) {
+		val launcher = createLauncher(
+			contract = ActivityResultContracts.StartActivityForResult(),
+			callback = { result ->
+				callback(result.resultCode == Activity.RESULT_OK)
+			},
+		)
+
+		launcher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+	}
+
+
+	private fun <I, O> createLauncher(
+		contract: ActivityResultContract<I, O>,
+		callback: (result: O) -> Unit,
+	): ActivityResultLauncher<I> {
+		var cleanerCallback: (() -> Unit)? = null
+
+		val launcher = activity.activityResultRegistry.register(
+			key = generateLauncherKey(),
+			contract = contract,
+			callback = { result ->
+				callback(result)
 				cleanerCallback?.invoke()
 				cleanerCallback = null
 			}
 		)
-		launcher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
 
 		cleanerCallback = {
 			launcher.unregister()
 		}
+
+		return launcher
 	}
 
-	override fun fromBundle(bundle: StateBundle?) {
-		val stateBundle = bundle ?: return
-		_makeDeviceDiscoverableLauncherKey = stateBundle.getString(
-			"_makeDeviceDiscoverableLauncherKey",
-			UUID.randomUUID().toString(),
-		)
-		_enableBluetoothLauncherKey = stateBundle.getString(
-			"_enableBluetoothLauncherKey",
-			UUID.randomUUID().toString(),
-		)
-	}
-
-	override fun toBundle(): StateBundle {
-		return StateBundle().apply {
-			putString("_makeDeviceDiscoverableLauncherKey", _makeDeviceDiscoverableLauncherKey)
-			putString("_enableBluetoothLauncherKey", _enableBluetoothLauncherKey)
-		}
-	}
+	// This only needs to persist across configuration changes
+	private fun generateLauncherKey() = UUID.randomUUID().toString()
 
 	private fun isPermissionGranted(permission: String): Boolean {
 		return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
@@ -162,22 +150,33 @@ class AndroidHelperImpl(
 }
 
 
-private class SecureSettingFlowDelegate(
+private class SettingFlowDelegate(
 	private val context: Context,
 	private val key: String,
 	private val scope: CoroutineScope,
+	private val type: Type,
 ) : ReadOnlyProperty<Any?, StateFlow<String>> {
 
 	private val flow by lazy {
 		callbackFlow {
 			val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
 				override fun onChange(selfChange: Boolean, uri: Uri?) {
-					val value = Settings.Secure.getString(context.contentResolver, key)
-					if (value != null) trySend(value)
+					val value = when (type) {
+						Type.Global -> Settings.Global.getString(context.contentResolver, key)
+						Type.System -> Settings.System.getString(context.contentResolver, key)
+						Type.Secure -> Settings.Secure.getString(context.contentResolver, key)
+					}
+					if (value != null) {
+						trySend(value)
+					}
 				}
 			}
 
-			val uri = Settings.Secure.getUriFor(key)
+			val uri = when (type) {
+				Type.Global -> Settings.Global.getUriFor(key)
+				Type.System -> Settings.System.getUriFor(key)
+				Type.Secure -> Settings.Secure.getUriFor(key)
+			}
 			context.contentResolver.registerContentObserver(uri, false, observer)
 
 			awaitClose {
@@ -191,12 +190,19 @@ private class SecureSettingFlowDelegate(
 	}
 
 	override fun getValue(thisRef: Any?, property: KProperty<*>): StateFlow<String> = flow
+
+	enum class Type {
+		Global,
+		System,
+		Secure,
+	}
 }
 
-private fun secureSettingFlow(
+private fun settingFlow(
 	context: Context,
 	key: String,
 	scope: CoroutineScope,
+	type: SettingFlowDelegate.Type,
 ): ReadOnlyProperty<Any?, StateFlow<String>> {
-	return SecureSettingFlowDelegate(context, key, scope)
+	return SettingFlowDelegate(context, key, scope, type)
 }

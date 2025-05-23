@@ -14,6 +14,7 @@ data object HomeModule : CoroutineScopedServiceModule() {
 	override fun bindModuleServices(serviceBinder: ServiceBinder) {
 		val bluetoothController: BluetoothController = BluetoothControllerImpl(
 			mainActivityHolder = serviceBinder.lookup(),
+			registeredScope = registeredScope,
 		)
 		val bluetoothPermissionController = BluetoothPermissionController(
 			mainActivityHolder = serviceBinder.lookup(),

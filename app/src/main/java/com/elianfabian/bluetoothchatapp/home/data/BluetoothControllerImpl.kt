@@ -10,44 +10,41 @@ import android.content.Context
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
-import com.elianfabian.bluetoothchatapp.chat.data.toBluetoothMessage
-import com.elianfabian.bluetoothchatapp.chat.data.toByteArray
 import com.elianfabian.bluetoothchatapp.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp.common.data.MainActivityHolder
-import com.elianfabian.bluetoothchatapp.common.util.getString
-import com.elianfabian.bluetoothchatapp.common.util.putString
+import com.elianfabian.bluetoothchatapp.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
 import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.simplestack.ScopedServices
 import com.zhuinden.statebundle.StateBundle
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.nio.ByteBuffer
 import java.util.UUID
 
 @SuppressLint("MissingPermission")
 class BluetoothControllerImpl(
 	private val mainActivityHolder: MainActivityHolder,
+	private val registeredScope: CoroutineScope,
 ) : BluetoothController,
 	ScopedServices.Registered,
+	ApplicationBackgroundStateChangeCallback,
 	Bundleable {
 
 	private val context: Context get() = mainActivityHolder.mainActivity
@@ -148,7 +145,6 @@ class BluetoothControllerImpl(
 		}
 	)
 
-	private var _currentServerSocket: BluetoothServerSocket? = null
 	private var _currentClientSocket: BluetoothSocket? = null
 
 
@@ -173,152 +169,117 @@ class BluetoothControllerImpl(
 		adapter.cancelDiscovery()
 	}
 
-	override fun startBluetoothServer(): Flow<BluetoothController.ConnectionResult> {
+	override suspend fun startBluetoothServer(): BluetoothController.ConnectionResult {
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
-		return flow {
-			val adapter = _bluetoothAdapter ?: return@flow
+		if (!_bluetoothState.value.isOn) {
+			return BluetoothController.ConnectionResult.CouldNotConnect
+		}
 
-			_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
+		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
 
-			val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
-				SdpRecordName,
-				SdpRecordUuid,
-			)
-			_currentServerSocket = serverSocket
+		_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
 
-			var shouldLoop = true
-			while (shouldLoop) {
-				val clientSocket = try {
-					serverSocket.accept()
-				}
-				catch (e: IOException) {
-					shouldLoop = false
-					null
-				}
-				_currentClientSocket = clientSocket
-				if (clientSocket != null) {
-					emit(BluetoothController.ConnectionResult.ConnectionEstablished)
-					_connectionState.value = BluetoothController.DeviceConnectionState.Connected
-					serverSocket.close()
+		val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
+			SdpRecordName,
+			SdpRecordUuid,
+		)
 
-					clientSocket.listenForIncomingString().collect { data ->
-						println("$$$ serverData = ${data}")
-						if (data.isEmpty()) {
-							return@collect
-						}
-						val message = BluetoothMessage(
-							senderName = clientSocket.remoteDevice.name,
-							content = data,
-							isFromLocalUser = false,
-						)
-						emit(
-							BluetoothController.ConnectionResult.Message(
-								message = message ?: BluetoothMessage(
-									content = "ERROR: FAILED TO PARSE MESSAGE",
-									senderName = "",
-									isFromLocalUser = false,
-								),
-							)
-						)
-					}
-				}
-			}
-		}.onCompletion {
-			println("$$$ BluetoothControllerImpl.startBluetoothServer() onCompletion")
-			closeConnection()
-		}.flowOn(Dispatchers.IO)
+		val clientSocket = serverSocket.tryAccept()
+		if (clientSocket == null) {
+			_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
+			return BluetoothController.ConnectionResult.CouldNotConnect
+		}
+
+		_currentClientSocket = clientSocket
+		_connectionState.value = BluetoothController.DeviceConnectionState.Connected
+		updatePairedDevices()
+
+		return BluetoothController.ConnectionResult.ConnectionEstablished
 	}
 
-	override fun connectToDevice(device: BluetoothDevice): Flow<BluetoothController.ConnectionResult> {
+	override suspend fun connectToDevice(device: BluetoothDevice): BluetoothController.ConnectionResult {
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
-		return flow {
-			val adapter = _bluetoothAdapter ?: return@flow
-			_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
+		if (!_bluetoothState.value.isOn) {
+			return BluetoothController.ConnectionResult.CouldNotConnect
+		}
 
-			val androidDevice = adapter.getRemoteDevice(device.address)
-			if (androidDevice !in adapter.bondedDevices) {
-				emit(BluetoothController.ConnectionResult.DeviceIsNotPaired)
-			}
+		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
+		_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
 
-			val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
-			_currentClientSocket = clientSocket
+		val androidDevice = adapter.getRemoteDevice(device.address)
 
-			stopScan()
+		val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
+		_currentClientSocket = clientSocket
 
-			if (clientSocket != null) {
-				try {
-					clientSocket.connect()
-					emit(BluetoothController.ConnectionResult.ConnectionEstablished)
-					_connectionState.value = BluetoothController.DeviceConnectionState.Connected
+		stopScan()
 
-					clientSocket.listenForIncomingString().collect { data ->
-						println("$$$ clientData = ${data}")
-						if (data.isEmpty()) {
-							return@collect
-						}
-						val message = BluetoothMessage(
-							senderName = device.name,
-							content = data,
-							isFromLocalUser = false,
-						)
-						emit(
-							BluetoothController.ConnectionResult.Message(
-								message = message ?: BluetoothMessage(
-									content = "ERROR: FAILED TO PARSE MESSAGE",
-									senderName = "",
-									isFromLocalUser = false,
-								),
-							)
-						)
-					}
-				}
-				catch (e: IOException) {
-					clientSocket.close()
-					emit(BluetoothController.ConnectionResult.CouldNotConnect)
-					_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
-				}
-			}
-		}.onCompletion {
-			println("$$$ BluetoothControllerImpl.connectToDevice() onCompletion")
-			closeConnection()
-		}.flowOn(Dispatchers.IO)
+		if (clientSocket == null) {
+			return BluetoothController.ConnectionResult.CouldNotConnect
+		}
+
+		val isConnectionSuccessFull = clientSocket.tryConnect()
+		if (!isConnectionSuccessFull) {
+			_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
+			return BluetoothController.ConnectionResult.CouldNotConnect
+		}
+		_connectionState.value = BluetoothController.DeviceConnectionState.Connected
+		updatePairedDevices()
+		return BluetoothController.ConnectionResult.ConnectionEstablished
 	}
 
-	private suspend fun connectToDevice2(device: BluetoothDevice): Boolean {
-		if (!canEnableBluetooth) {
-			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
-		}
-
-		val adapter = _bluetoothAdapter ?: return false
-
+	private suspend fun BluetoothServerSocket.tryAccept(): BluetoothSocket? {
 		return withContext(Dispatchers.IO) {
-			_connectionState.value = BluetoothController.DeviceConnectionState.Connecting
-
-			val androidDevice = adapter.getRemoteDevice(device.address)
-//			if (androidDevice !in adapter.bondedDevices) {
-////				emit(BluetoothController.ConnectionResult.DeviceIsNotPaired)
-//				return@withContext false
-//			}
-
-			val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
+			val clientSocket = try {
+				// If device is not paired it will show a pop-up dialog to pair it
+				accept()
+			}
+			catch (e: IOException) {
+				null
+			}
 			_currentClientSocket = clientSocket
+			if (clientSocket == null) {
+				close()
+				return@withContext null
+			}
 
-			stopScan()
 
+			return@withContext clientSocket
+		}
+	}
+
+	private suspend fun BluetoothSocket.tryConnect(): Boolean {
+		return withContext(Dispatchers.IO) {
 			try {
-				clientSocket.connect()
-				_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
+				// If device is not paired it will show a pop-up dialog to pair it
+				connect()
+				_connectionState.value = BluetoothController.DeviceConnectionState.Connected
 				return@withContext true
 			}
 			catch (e: IOException) {
-				clientSocket.close()
+				close()
 				_connectionState.value = BluetoothController.DeviceConnectionState.Disconnected
 				return@withContext false
 			}
+		}
+	}
+
+	override fun listenMessages(): Flow<BluetoothMessage> {
+		if (!canEnableBluetooth) {
+			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
+		}
+
+		val clientSocket = _currentClientSocket ?: throw IllegalStateException("Can't listen for messages if there's no client socket")
+
+		return clientSocket.listenForIncomingString().map { message ->
+			BluetoothMessage(
+				isFromLocalUser = false,
+				content = message,
+				senderName = "",
+			)
 		}
 	}
 
@@ -337,36 +298,13 @@ class BluetoothControllerImpl(
 		}
 
 		return null
-
-
-//		val adapter = _bluetoothAdapter ?: return null
-//
-//		val bluetoothMessage = BluetoothMessage(
-//			content = message,
-//			senderName = adapter.name ?: "",
-//			isFromLocalUser = true,
-//		)
-//
-//		val data = bluetoothMessage.toByteArray()
-//		val clientSocket = _currentClientSocket ?: return null
-//
-//		if (!clientSocket.sendData(data)) {
-//			return null
-//		}
-//		return bluetoothMessage
 	}
 
 	override fun closeConnection() {
-		_currentServerSocket?.close()
+//		_currentServerSocket?.close()
 		_currentClientSocket?.close()
-		_currentServerSocket = null
+//		_currentServerSocket = null
 		_currentClientSocket = null
-	}
-
-	override fun release() {
-		context.unregisterReceiver(_foundDeviceReceiver)
-		context.unregisterReceiver(_bluetoothDeviceConnectionReceiver)
-		closeConnection()
 	}
 
 	private fun updatePairedDevices() {
@@ -414,11 +352,10 @@ class BluetoothControllerImpl(
 		return channelFlow {
 			while (isActive) {
 				try {
-					val result = inputStream.readString()
-
-					send(result.also {
+					val result = inputStream.readString().also {
 						println("$$$ stringOut = $it")
-					})
+					}
+					send(result)
 				}
 				catch (e: IOException) {
 					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
@@ -426,6 +363,8 @@ class BluetoothControllerImpl(
 					break
 				}
 			}
+		}.onCompletion {
+			closeConnection()
 		}.flowOn(Dispatchers.IO)
 	}
 
@@ -450,7 +389,22 @@ class BluetoothControllerImpl(
 		}
 	}
 
+	override fun onAppEnteredForeground() {
+		updatePairedDevices()
+	}
+
+	override fun onAppEnteredBackground() {
+		// no-op$
+	}
+
 	override fun onServiceRegistered() {
+		registeredScope.launch {
+			_bluetoothState.collect { state ->
+				if (state == BluetoothController.BluetoothState.On) {
+					updatePairedDevices()
+				}
+			}
+		}
 		context.registerReceiver(
 			_foundDeviceReceiver,
 			IntentFilter(AndroidBluetoothDevice.ACTION_FOUND),

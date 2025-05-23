@@ -37,12 +37,8 @@ abstract class BasePermissionControllerImpl(
 
 	private var _launcherKey = UUID.randomUUID().toString()
 
-	// We might think that this solution won't work if we clear the storage,
-	// but cleaning the storage also reset the permissions.
-	private val _sharedPrefs = mainActivityHolder.mainActivity.getSharedPreferences("permissions", Context.MODE_PRIVATE)
 
-
-	private val _state = MutableStateFlow(getCurrentState())
+	private val _state by lazy { MutableStateFlow(getCurrentState()) }
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<String> by lazy {
@@ -119,12 +115,7 @@ abstract class BaseMultiplePermissionControllerImpl(
 
 	private var _uuid = UUID.randomUUID().toString()
 
-	// We might think that this solution won't work if we clear the storage,
-	// but cleaning the storage also reset the permissions.
-	private val _sharedPrefs = mainActivityHolder.mainActivity.getSharedPreferences("permissions", Context.MODE_PRIVATE)
-
-
-	private val _state = MutableStateFlow(getCurrentState())
+	private val _state by lazy { MutableStateFlow(getCurrentState()) }
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<Array<String>> by lazy {

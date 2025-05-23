@@ -40,7 +40,6 @@ class MainActivity : FragmentActivity() {
 	}
 
 	override fun onCreate(savedInstanceState: Bundle?) {
-		_instance = this
 		super.onCreate(savedInstanceState)
 
 		println("$$$ mainActivity.onCreate")
@@ -102,8 +101,6 @@ class MainActivity : FragmentActivity() {
 		backstack.forEachServiceOfType<MainActivityCallbacks> { service ->
 			service.onDestroyMainActivity(this)
 		}
-
-		_instance = null
 	}
 
 
@@ -137,12 +134,6 @@ class MainActivity : FragmentActivity() {
 			},
 			modifier = modifier
 		)
-	}
-
-
-	companion object {
-		private var _instance: MainActivity? = null
-		val instance: MainActivity get() = _instance!!
 	}
 }
 
