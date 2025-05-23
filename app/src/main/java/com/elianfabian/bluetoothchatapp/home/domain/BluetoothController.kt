@@ -12,7 +12,8 @@ interface BluetoothController {
 	val isScanning: StateFlow<Boolean>
 	val scannedDevices: StateFlow<List<BluetoothDevice>>
 	val pairedDevices: StateFlow<List<BluetoothDevice>>
-	val connectionState: StateFlow<DeviceConnectionState>
+	val connectionState: StateFlow<ConnectionState>
+	val pairingState: StateFlow<PairingState>
 
 	fun startScan()
 	fun stopScan()
@@ -22,7 +23,6 @@ interface BluetoothController {
 	fun listenMessages(): Flow<BluetoothMessage>
 
 	suspend fun trySendMessage(message: String): BluetoothMessage?
-
 
 
 	fun closeConnection()
@@ -36,10 +36,16 @@ interface BluetoothController {
 		val isOn: Boolean get() = this == On
 	}
 
-	enum class DeviceConnectionState {
+	enum class ConnectionState {
 		Connected,
 		Connecting,
 		Disconnected,
+	}
+
+	enum class PairingState {
+		Paired,
+		Pairing,
+		None,
 	}
 
 	sealed interface ConnectionResult {

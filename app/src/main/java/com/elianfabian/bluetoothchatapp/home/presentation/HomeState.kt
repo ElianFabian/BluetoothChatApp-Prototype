@@ -10,7 +10,7 @@ data class HomeState(
 	val isBluetoothSupported: Boolean,
 	val isBluetoothOn: Boolean,
 	val isScanning: Boolean = false,
-	val connectionState: BluetoothController.DeviceConnectionState = BluetoothController.DeviceConnectionState.Disconnected,
+	val connectionState: BluetoothController.ConnectionState = BluetoothController.ConnectionState.Disconnected,
 	val pairedDevices: List<BluetoothDevice> = emptyList(),
 	val scannedDevices: List<BluetoothDevice> = emptyList(),
 	val permissionState: List<PermissionState> = emptyList(),

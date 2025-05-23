@@ -14,14 +14,6 @@ class BluetoothStateChangeBroadcastReceiver(
 			return
 		}
 		val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-		when (state) {
-			BluetoothAdapter.STATE_OFF,
-			BluetoothAdapter.STATE_TURNING_OFF,
-			BluetoothAdapter.STATE_ON,
-			BluetoothAdapter.STATE_TURNING_ON,
-				-> {
-				onStateChange(state)
-			}
-		}
+		onStateChange(state)
 	}
 }
