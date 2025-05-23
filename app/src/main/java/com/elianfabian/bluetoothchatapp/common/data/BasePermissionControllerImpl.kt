@@ -212,6 +212,11 @@ private fun getPermissionState(
 				else PermissionState.PermanentlyDenied
 			}
 		}
-		else PermissionState.Denied
+		else {
+			if (!sharedPrefs.getBoolean(permissionName, false)) {
+				PermissionState.NotDetermined
+			}
+			else PermissionState.Denied
+		}
 	}
 }
