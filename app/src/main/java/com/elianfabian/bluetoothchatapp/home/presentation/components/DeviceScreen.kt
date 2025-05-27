@@ -1,5 +1,6 @@
 package com.elianfabian.bluetoothchatapp.home.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
@@ -32,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,6 +47,7 @@ import com.elianfabian.bluetoothchatapp.common.util.simplestack.compose.BasePrev
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
 import com.elianfabian.bluetoothchatapp.home.presentation.HomeAction
 import com.elianfabian.bluetoothchatapp.home.presentation.HomeState
+import kotlin.random.Random
 
 @Composable
 fun DeviceScreen(
@@ -128,27 +132,42 @@ fun DeviceScreen(
 					Text("Send")
 				}
 				TextField(
+					value = state.enteredTargetDeviceAddress,
+					onValueChange = { value ->
+						onAction(HomeAction.EnterMessage(value))
+					},
+					placeholder = {
+						Text("Target device address")
+					},
+				)
+				TextField(
 					value = state.enteredMessage,
 					onValueChange = { value ->
 						onAction(HomeAction.EnterMessage(value))
+					},
+					placeholder = {
+						Text("Message to send")
 					},
 				)
 			}
 			Text("Device name: ${state.bluetoothDeviceName}")
 			Text("Connection state: ${state.connectionState}")
-			Button(
-				onClick = {
-					onAction(HomeAction.MakeDeviceDiscoverable)
+			Row {
+				Button(
+					onClick = {
+						onAction(HomeAction.MakeDeviceDiscoverable)
+					}
+				) {
+					Text("Make discoverable")
 				}
-			) {
-				Text("Make discoverable")
-			}
-			Button(
-				onClick = {
-					onAction(HomeAction.OpenBluetoothSettings)
+				Spacer(modifier = Modifier.width(6.dp))
+				Button(
+					onClick = {
+						onAction(HomeAction.OpenBluetoothSettings)
+					}
+				) {
+					Text("Bluetooth settings")
 				}
-			) {
-				Text("Open bluetooth settings")
 			}
 			Button(
 				onClick = {
@@ -157,10 +176,12 @@ fun DeviceScreen(
 			) {
 				Text("Device info settings")
 			}
-			Text("PermissionState: ${state.permissionState}")
 			Spacer(modifier = Modifier.height(16.dp))
 			BluetoothDeviceList(
 				state = state,
+				onConnectedDeviceClick = { device ->
+					onAction(HomeAction.ClickConnectedDevice(device))
+				},
 				onPairedDeviceClick = { device ->
 					onAction(HomeAction.ClickPairedDevice(device))
 				},
@@ -171,28 +192,24 @@ fun DeviceScreen(
 					.fillMaxWidth()
 					.weight(1F)
 			)
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
+			Row(
+				horizontalArrangement = Arrangement.SpaceAround,
+				modifier = Modifier
+					.fillMaxWidth()
 			) {
-				Row(
-					horizontalArrangement = Arrangement.SpaceAround,
-					modifier = Modifier
-						.fillMaxWidth()
+				Button(
+					onClick = {
+						onAction(HomeAction.StartScan)
+					}
 				) {
-					Button(
-						onClick = {
-							onAction(HomeAction.StartScan)
-						}
-					) {
-						Text(text = "Start scan")
+					Text(text = "Scan")
+				}
+				Button(
+					onClick = {
+						onAction(HomeAction.StopScan)
 					}
-					Button(
-						onClick = {
-							onAction(HomeAction.StopScan)
-						}
-					) {
-						Text(text = "Stop scan")
-					}
+				) {
+					Text(text = "Stop scan")
 				}
 				Button(
 					onClick = {
@@ -210,6 +227,7 @@ fun DeviceScreen(
 private fun BluetoothDeviceList(
 	modifier: Modifier = Modifier,
 	state: HomeState,
+	onConnectedDeviceClick: (device: BluetoothDevice) -> Unit,
 	onPairedDeviceClick: (device: BluetoothDevice) -> Unit,
 	onScannedDeviceClick: (device: BluetoothDevice) -> Unit,
 ) {
@@ -227,22 +245,44 @@ private fun BluetoothDeviceList(
 	) {
 		item {
 			Text(
+				text = "Connected devices",
+				fontWeight = FontWeight.Bold,
+				fontSize = 24.sp,
+			)
+		}
+		items(state.connectedDevices) { device ->
+			BluetoothDeviceItem(
+				name = device.name,
+				address = device.address,
+				isConnected = device.isConnected,
+				pairingState = device.pairingState,
+				onClick = {
+					onConnectedDeviceClick(device)
+				},
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(vertical = 6.dp)
+			)
+		}
+		item {
+			Text(
 				text = "Paired devices",
 				fontWeight = FontWeight.Bold,
 				fontSize = 24.sp,
 			)
 		}
 		items(state.pairedDevices) { device ->
-			Text(
-				text = device.name ?: device.address,
-				fontSize = 18.sp,
-				lineHeight = 30.sp,
-				color = if (device.name != null) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+			BluetoothDeviceItem(
+				name = device.name,
+				address = device.address,
+				isConnected = device.isConnected,
+				pairingState = device.pairingState,
+				onClick = {
+					onPairedDeviceClick(device)
+				},
 				modifier = Modifier
 					.fillMaxWidth()
-					.clickable {
-						onPairedDeviceClick(device)
-					}
+					.padding(vertical = 6.dp)
 			)
 		}
 		item {
@@ -268,16 +308,17 @@ private fun BluetoothDeviceList(
 			}
 		}
 		items(state.scannedDevices) { device ->
-			Text(
-				text = device.name ?: device.address,
-				fontSize = 18.sp,
-				lineHeight = 30.sp,
-				color = if (device.name != null) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant,
+			BluetoothDeviceItem(
+				name = device.name,
+				address = device.address,
+				isConnected = device.isConnected,
+				pairingState = device.pairingState,
+				onClick = {
+					onScannedDeviceClick(device)
+				},
 				modifier = Modifier
 					.fillMaxWidth()
-					.clickable {
-						onScannedDeviceClick(device)
-					}
+					.padding(vertical = 6.dp)
 			)
 		}
 		item {
@@ -299,6 +340,50 @@ private fun BluetoothDeviceList(
 	}
 }
 
+@Composable
+private fun BluetoothDeviceItem(
+	name: String?,
+	address: String,
+	isConnected: Boolean,
+	pairingState: BluetoothDevice.PairingState,
+	onClick: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	Row(
+		modifier = modifier
+			.clip(RoundedCornerShape(8.dp))
+			.background(MaterialTheme.colorScheme.surfaceVariant)
+			.padding(12.dp)
+			.clickable {
+				onClick()
+			}
+	) {
+		if (pairingState == BluetoothDevice.PairingState.Pairing) {
+			CircularProgressIndicator(
+				strokeWidth = 3.dp,
+				modifier = Modifier
+					.size(20.dp)
+			)
+		}
+		Column {
+			if (name != null) {
+				Text(
+					text = name,
+					fontSize = 18.sp,
+					lineHeight = 30.sp,
+				)
+				Spacer(modifier = Modifier.height(4.dp))
+			}
+			Text(
+				text = address,
+				fontSize = 18.sp,
+				lineHeight = 30.sp,
+				color = if (isConnected) Color.Green else MaterialTheme.colorScheme.onSurfaceVariant,
+			)
+		}
+	}
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun Preview() = BasePreview {
@@ -312,25 +397,31 @@ private fun Preview() = BasePreview {
 	val devices = deviceNames.map { name ->
 		BluetoothDevice(
 			name = name,
-			address = "",
+			address = "123:45:67:89:AB:$name",
+			isConnected = false,
+			pairingState = when (Random.nextInt(0, 3)) {
+				0 -> BluetoothDevice.PairingState.Paired
+				1 -> BluetoothDevice.PairingState.Pairing
+				else -> BluetoothDevice.PairingState.None
+			},
 		)
 	}
 
 	DeviceScreen(
 		state = HomeState(
 			bluetoothDeviceName = "Bluetooth Device",
-			pairedDevices = devices,
-			scannedDevices = devices,
+			pairedDevices = devices.filter { it.pairingState.isPaired },
+			scannedDevices = devices.filter { !it.pairingState.isPaired },
 			isBluetoothSupported = true,
 			isScanning = true,
 			isBluetoothOn = true,
-			permissionDialog = HomeState.PermissionDialogState(
-				title = "Permission Denied",
-				message = "Please, enable Bluetooth permissions in settings.",
-				actionName = "Settings",
-				onAction = {},
-				onDismissRequest = {},
-			),
+//			permissionDialog = HomeState.PermissionDialogState(
+//				title = "Permission Denied",
+//				message = "Please, enable Bluetooth permissions in settings.",
+//				actionName = "Settings",
+//				onAction = {},
+//				onDismissRequest = {},
+//			),
 			messages = listOf(
 				"Hey",
 				"Hello",
@@ -341,10 +432,10 @@ private fun Preview() = BasePreview {
 				"See you later",
 				"Bye",
 				"Take care",
-				"See you soon",
-				"Have a nice day",
-				"Goodbye",
-				"See you next time",
+//				"See you soon",
+//				"Have a nice day",
+//				"Goodbye",
+//				"See you next time",
 			).mapIndexed { index, s ->
 				BluetoothMessage(
 					content = s,

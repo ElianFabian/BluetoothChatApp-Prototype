@@ -13,4 +13,5 @@ sealed interface HomeAction {
 	data class EnterMessage(val message: String) : HomeAction
 	data class ClickScannedDevice(val device: BluetoothDevice) : HomeAction
 	data class ClickPairedDevice(val device: BluetoothDevice) : HomeAction
+	data class ClickConnectedDevice(val device: BluetoothDevice) : HomeAction
 }

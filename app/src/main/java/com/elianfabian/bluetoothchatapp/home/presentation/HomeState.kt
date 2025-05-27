@@ -11,12 +11,14 @@ data class HomeState(
 	val isBluetoothOn: Boolean,
 	val isScanning: Boolean = false,
 	val connectionState: BluetoothController.ConnectionState = BluetoothController.ConnectionState.Disconnected,
+	val connectedDevices: List<BluetoothDevice> = emptyList(),
 	val pairedDevices: List<BluetoothDevice> = emptyList(),
 	val scannedDevices: List<BluetoothDevice> = emptyList(),
 	val permissionState: List<PermissionState> = emptyList(),
 	val permissionDialog: PermissionDialogState? = null,
 	val messages: List<BluetoothMessage> = emptyList(),
 	val enteredMessage: String = "",
+	val enteredTargetDeviceAddress: String = "",
 ) {
 	data class PermissionDialogState(
 		val title: String,

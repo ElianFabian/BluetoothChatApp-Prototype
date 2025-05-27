@@ -27,14 +27,12 @@ class BluetoothApplication : Application(), OnMainBackstackIsInitializedCallback
 
 	private val _processLifecycleObserver = object : DefaultLifecycleObserver {
 		override fun onStart(owner: LifecycleOwner) {
-			println("$$$ DefaultLifecycleObserver.onStart")
 			mainBackstack.forEachServiceOfType<ApplicationBackgroundStateChangeCallback> { service ->
 				service.onAppEnteredForeground()
 			}
 		}
 
 		override fun onStop(owner: LifecycleOwner) {
-			println("$$$ DefaultLifecycleObserver.onStop")
 			mainBackstack.forEachServiceOfType<ApplicationBackgroundStateChangeCallback> { service ->
 				service.onAppEnteredBackground()
 			}

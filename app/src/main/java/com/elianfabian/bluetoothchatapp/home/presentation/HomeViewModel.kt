@@ -24,11 +24,11 @@ class HomeViewModel(
 
 	private val _permissionDialog = MutableStateFlow<HomeState.PermissionDialogState?>(null)
 	private val _messages = MutableStateFlow<List<BluetoothMessage>>(emptyList())
-	private val _enteredMessage = MutableStateFlow<String>("")
+	private val _enteredMessage = MutableStateFlow("")
+	private val _enteredTargetDeviceAddress = MutableStateFlow("")
 
 	val state = combineTuple(
-		bluetoothController.pairedDevices,
-		bluetoothController.scannedDevices,
+		bluetoothController.devices,
 		bluetoothController.isScanning,
 		bluetoothController.state,
 		bluetoothPermissionController.state,
@@ -37,10 +37,12 @@ class HomeViewModel(
 		bluetoothController.connectionState,
 		_messages,
 		_enteredMessage,
-	).map { (pairedDevices, scannedDevices, isScanning, bluetoothState, state, permissionDialog, bluetoothName, connectionState, messages, enteredMessage) ->
+		_enteredTargetDeviceAddress
+	).map { (devices, isScanning, bluetoothState, state, permissionDialog, bluetoothName, connectionState, messages, enteredMessage, enteredAddress) ->
 		HomeState(
-			pairedDevices = pairedDevices,
-			scannedDevices = scannedDevices,
+			connectedDevices = devices.filter { it.isConnected },
+			pairedDevices = devices.filter { it.pairingState.isPaired && !it.isConnected },
+			scannedDevices = devices.filter { !it.pairingState.isPaired && !it.isConnected },
 			isScanning = isScanning,
 			isBluetoothSupported = bluetoothController.isBluetoothSupported,
 			isBluetoothOn = bluetoothState.isOn,
@@ -50,6 +52,7 @@ class HomeViewModel(
 			connectionState = connectionState,
 			messages = messages,
 			enteredMessage = enteredMessage,
+			enteredTargetDeviceAddress = enteredAddress,
 		)
 	}.stateIn(
 		scope = registeredScope,
@@ -81,7 +84,7 @@ class HomeViewModel(
 						println("$$$ server-result = $result")
 						when (result) {
 							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-								bluetoothController.listenMessages().collect { message ->
+								bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 									_messages.update {
 										it + message
 									}
@@ -102,8 +105,29 @@ class HomeViewModel(
 				androidHelper.makeDeviceDiscoverable {}
 			}
 			is HomeAction.SendMessage -> {
+				val targetDeviceAddress = _enteredTargetDeviceAddress.value
+				if (targetDeviceAddress.isBlank()) {
+					androidHelper.showToast("Please, enter a target device address.")
+					return
+				}
+				if (_enteredMessage.value.isBlank()) {
+					androidHelper.showToast("Please, enter a message to send.")
+					return
+				}
+				val connectedDevices = bluetoothController.devices.value.filter { it.isConnected }
+				if (connectedDevices.isEmpty()) {
+					androidHelper.showToast("Please, connect to a device before sending a message.")
+					return
+				}
+				if (connectedDevices.none { it.address == targetDeviceAddress }) {
+					androidHelper.showToast("Please, connect to the device with address: $targetDeviceAddress before sending a message.")
+					return
+				}
 				registeredScope.launch {
-					val message = bluetoothController.trySendMessage(_enteredMessage.value)
+					val message = bluetoothController.trySendMessage(
+						address = targetDeviceAddress,
+						message = _enteredMessage.value,
+					)
 					if (message != null) {
 						_messages.update {
 							it + message
@@ -117,11 +141,11 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickPairedDevice -> {
 				registeredScope.launch {
-					val result = bluetoothController.connectToDevice(action.device)
+					val result = bluetoothController.connectToDevice(action.device.address)
 					println("$$$ connect-result = $result")
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-							bluetoothController.listenMessages().collect { message ->
+							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
 								}
@@ -133,11 +157,11 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickScannedDevice -> {
 				registeredScope.launch {
-					val result = bluetoothController.connectToDevice(action.device)
+					val result = bluetoothController.connectToDevice(action.device.address)
 					println("$$$ connect-result = $result")
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-							bluetoothController.listenMessages().collect { message ->
+							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
 								}
@@ -146,6 +170,9 @@ class HomeViewModel(
 						else -> Unit
 					}
 				}
+			}
+			is HomeAction.ClickConnectedDevice -> {
+				_enteredTargetDeviceAddress.value = action.device.address
 			}
 		}
 	}
