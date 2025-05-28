@@ -4,9 +4,7 @@ import android.Manifest
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
-import android.content.pm.PackageManager
 import android.provider.Settings
-import android.widget.Toast
 import androidx.annotation.RequiresPermission
 import androidx.core.content.getSystemService
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -58,6 +56,10 @@ class BluetoothApplication : Application(), OnMainBackstackIsInitializedCallback
 		super.onCreate()
 
 		println("$$$ app.onCreate")
+
+		val deviceName = Settings.Global.getString(contentResolver, "device_name")
+		val bluetoothName = Settings.Secure.getString(contentResolver, "bluetooth_name")
+		println("$$$$ deviceName = $deviceName, bluetoothName = $bluetoothName")
 
 		val bluetoothManager = getSystemService<BluetoothManager>() ?: return
 		println("$$$ discoverable = ${bluetoothManager.adapter?.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE}")

@@ -15,17 +15,15 @@ import com.elianfabian.bluetoothchatapp.common.data.MainActivityHolder
 import com.elianfabian.bluetoothchatapp.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
-import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.simplestack.ScopedServices
-import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
@@ -44,12 +42,9 @@ class BluetoothControllerImpl(
 	private val registeredScope: CoroutineScope,
 ) : BluetoothController,
 	ScopedServices.Registered,
-	ApplicationBackgroundStateChangeCallback,
-	Bundleable {
+	ApplicationBackgroundStateChangeCallback {
 
 	private val context: Context get() = mainActivityHolder.mainActivity
-
-	private var _launcherKey = UUID.randomUUID().toString()
 
 	private val _bluetoothManager = context.getSystemService(BluetoothManager::class.java) ?: throw IllegalStateException("Couldn't get the BluetoothManager")
 	private val _bluetoothAdapter: BluetoothAdapter? = _bluetoothManager.adapter
@@ -80,25 +75,15 @@ class BluetoothControllerImpl(
 	)
 	override val isScanning = _isScanning.asStateFlow()
 
-//	private val _scannedDevices = MutableStateFlow(emptyList<BluetoothDevice>())
-//	override val scannedDevices = _scannedDevices.asStateFlow()
-//
-//	private val _pairedDevices = MutableStateFlow(emptyList<BluetoothDevice>())
-//	override val pairedDevices = _pairedDevices.asStateFlow()
+	private val _isWaitingForConnection = MutableStateFlow(false)
+	override val isWaitingForConnection = _isWaitingForConnection.asStateFlow()
 
 	private val _devices = MutableStateFlow(emptyList<BluetoothDevice>())
 	override val devices = _devices.asStateFlow()
 
-	private val _connectionState = MutableStateFlow(BluetoothController.ConnectionState.Disconnected)
-	override val connectionState = _connectionState.asStateFlow()
-
-	private val _paringState = MutableStateFlow(BluetoothController.PairingState.None)
-	override val pairingState = _paringState.asStateFlow()
-
-
 	private val _deviceFoundReceiver = DeviceFoundBroadcastReceiver(
 		onDeviceFound = { androidDevice ->
-			println("$$$ BluetoothControllerImpl.onDeviceFound() androidDevice = $androidDevice")
+			//println("$$$ BluetoothControllerImpl.onDeviceFound() androidDevice = $androidDevice")
 			_devices.update { devices ->
 				val existingDevice = devices.find { it.address == androidDevice.address }
 				if (existingDevice != null) {
@@ -128,17 +113,10 @@ class BluetoothControllerImpl(
 							AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
 							else -> BluetoothDevice.PairingState.None
 						},
-						isConnected = false,
+						connectionState = BluetoothDevice.ConnectionState.Disconnected,
 					)
 				}
 			}
-
-//			_scannedDevices.update { scannedDevices ->
-//				if (device !in scannedDevices) {
-//					scannedDevices + device
-//				}
-//				else scannedDevices
-//			}
 		}
 	)
 
@@ -169,24 +147,18 @@ class BluetoothControllerImpl(
 
 	private val _bluetoothDeviceConnectionReceiver = BluetoothDeviceConnectionBroadcastReceiver(
 		onConnectionStateChange = { androidDevice, isConnected ->
-//			val adapter = _bluetoothAdapter ?: return@BluetoothDeviceConnectionBroadcastReceiver
-//			if (device !in adapter.bondedDevices) {
-//				return@BluetoothDeviceConnectionBroadcastReceiver
-//			}
-//			println("$$$ BluetoothControllerImpl.onConnectionStateChange() device(name=${device.name}, address=${device.address}), isConnected=$isConnected")
-//			_connectionState.value = if (isConnected) {
-//				BluetoothController.ConnectionState.Connected
-//			}
-//			else BluetoothController.ConnectionState.Disconnected
-
+			// When we try to connect to a paired device, this callback executes with isConnected to true and after some small time (around 4s)
+			// it executes again with isConnected to false
 			println("$$$ BluetoothControllerImpl.onConnectionStateChange() androidDevice(name=${androidDevice.name}, address=${androidDevice.address}), isConnected=$isConnected")
 
-			_devices.update { devices ->
-				devices.map { device ->
-					if (device.address == androidDevice.address) {
-						device.copy(isConnected = isConnected)
+			if (!isConnected) {
+				_devices.update { devices ->
+					devices.map { device ->
+						if (device.address == androidDevice.address) {
+							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+						}
+						else device
 					}
-					else device
 				}
 			}
 		}
@@ -226,6 +198,7 @@ class BluetoothControllerImpl(
 	)
 
 	private val _clientSocketByAddress = mutableMapOf<String, BluetoothSocket>()
+	private var _serverSocket: BluetoothServerSocket? = null
 
 
 	override fun startScan() {
@@ -259,37 +232,44 @@ class BluetoothControllerImpl(
 
 		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
 
-		// TODO: check if we truly need to update the connection state here or it's just enough to do it in the corresponding receiver
-		_connectionState.value = BluetoothController.ConnectionState.Connecting
-
+		_isWaitingForConnection.value = true
 		val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
 			SdpRecordName,
 			SdpRecordUuid,
 		)
+		_serverSocket = serverSocket
 
 		val clientSocket = serverSocket.tryAccept()
 		if (clientSocket == null) {
-			_connectionState.value = BluetoothController.ConnectionState.Disconnected
+			_isWaitingForConnection.value = false
+			serverSocket.close()
+			_serverSocket = null
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
+
+		_isWaitingForConnection.value = false
 
 		_devices.update { devices ->
 			devices.map { device ->
 				if (device.address == clientSocket.remoteDevice.address) {
-					device.copy(isConnected = true)
+					device.copy(connectionState = BluetoothDevice.ConnectionState.Connected)
 				}
 				else device
 			}
 		}
 
 		_clientSocketByAddress[clientSocket.remoteDevice.address] = clientSocket
-		_connectionState.value = BluetoothController.ConnectionState.Connected
 		updateDevices()
 
 		val connectedDevice = _devices.value.find { it.address == clientSocket.remoteDevice.address }
 			?: throw IllegalStateException("Connected device not found in the list of devices")
 
 		return BluetoothController.ConnectionResult.ConnectionEstablished(connectedDevice)
+	}
+
+	override fun stopBluetoothServer() {
+		_serverSocket?.close()
+		_serverSocket = null
 	}
 
 	override suspend fun connectToDevice(address: String): BluetoothController.ConnectionResult {
@@ -301,12 +281,21 @@ class BluetoothControllerImpl(
 		}
 
 		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
-		_connectionState.value = BluetoothController.ConnectionState.Connecting
+
+		_devices.update { devices ->
+			devices.map { device ->
+				if (device.address == address) {
+					device.copy(connectionState = BluetoothDevice.ConnectionState.Connecting)
+				}
+				else device
+			}
+		}
 
 		val androidDevice = adapter.getRemoteDevice(address)
 
+		println("$$$ connectToDevice androidDevice = $androidDevice")
+
 		val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
-//		_currentClientSocket = clientSocket
 		_clientSocketByAddress[address] = clientSocket
 
 		stopScan()
@@ -316,8 +305,16 @@ class BluetoothControllerImpl(
 		}
 
 		val isConnectionSuccessFull = clientSocket.tryConnect()
+		println("$$$ connectionSuccessFull = $isConnectionSuccessFull, isConnected = ${clientSocket.isConnected}, remoteDevice = ${clientSocket.remoteDevice}")
 		if (!isConnectionSuccessFull) {
-			_connectionState.value = BluetoothController.ConnectionState.Disconnected
+			_devices.update { devices ->
+				devices.map { device ->
+					if (device.address == address) {
+						device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+					}
+					else device
+				}
+			}
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
 
@@ -326,14 +323,13 @@ class BluetoothControllerImpl(
 				if (device.address == androidDevice.address) {
 					device.copy(
 						name = androidDevice.name ?: device.name,
-						isConnected = true,
+						connectionState = BluetoothDevice.ConnectionState.Connected,
 					)
 				}
 				else device
 			}
 		}
 
-		_connectionState.value = BluetoothController.ConnectionState.Connected
 		updateDevices()
 
 		val connectedDevice = _devices.value.find { it.address == androidDevice.address }
@@ -350,24 +346,30 @@ class BluetoothControllerImpl(
 			return false
 		}
 
-		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
-		val androidDevice = adapter.getRemoteDevice(address)
+		_devices.update { devices ->
+			devices.map { device ->
+				if (device.address == address) {
+					device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnecting)
+				}
+				else device
+			}
+		}
 
-//		val clientSocket = _currentClientSocket ?: return false
 		val clientSocket = _clientSocketByAddress[address]
 			?: throw IllegalStateException("No client socket found for address: $address")
-//		if (clientSocket.isConnected && androidDevice.address == clientSocket.remoteDevice.address) {
-//			clientSocket.close()
-//			_currentClientSocket = null
-//			_connectionState.value = BluetoothController.ConnectionState.Disconnected
-//			updateDevices()
-//			return true
-//		}
+
 		if (clientSocket.isConnected) {
 			try {
 				clientSocket.close()
 				_clientSocketByAddress.remove(address)
-				_connectionState.value = BluetoothController.ConnectionState.Disconnected
+				_devices.update { devices ->
+					devices.map { device ->
+						if (device.address == address) {
+							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+						}
+						else device
+					}
+				}
 				updateDevices()
 				return true
 			}
@@ -391,7 +393,7 @@ class BluetoothControllerImpl(
 			catch (e: IOException) {
 				null
 			}
-//			_currentClientSocket = clientSocket
+
 			if (clientSocket == null) {
 				close()
 				return@withContext null
@@ -408,12 +410,10 @@ class BluetoothControllerImpl(
 			try {
 				// If device is not paired it will show a pop-up dialog to pair it
 				connect()
-				_connectionState.value = BluetoothController.ConnectionState.Connected
 				return@withContext true
 			}
 			catch (e: IOException) {
 				close()
-				_connectionState.value = BluetoothController.ConnectionState.Disconnected
 				return@withContext false
 			}
 		}
@@ -424,7 +424,6 @@ class BluetoothControllerImpl(
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
 
-//		val clientSocket = _currentClientSocket ?: throw IllegalStateException("Can't listen for messages if there's no client socket")
 		val clientSocket = _clientSocketByAddress[address]
 			?: throw IllegalStateException("Can't listen for messages if there's no client socket")
 
@@ -432,8 +431,12 @@ class BluetoothControllerImpl(
 			BluetoothMessage(
 				isFromLocalUser = false,
 				content = message,
-				senderName = "",
+				senderName = clientSocket.remoteDevice.name ?: "",
+				senderAddress = clientSocket.remoteDevice?.address ?: "",
 			)
+		}.onCompletion {
+			clientSocket.close()
+			_clientSocketByAddress.remove(address)
 		}
 	}
 
@@ -445,37 +448,18 @@ class BluetoothControllerImpl(
 			return null
 		}
 
-//		val clientSocket = _currentClientSocket ?: return null
 		val clientSocket = _clientSocketByAddress[address]
 			?: throw IllegalStateException("Can't send message if there's no client socket for address: $address")
 		if (clientSocket.sendString(message)) {
 			return BluetoothMessage(
-				senderName = "",
+				senderName = null,
+				senderAddress = "",
 				content = message,
 				isFromLocalUser = true,
 			)
 		}
 
 		return null
-	}
-
-	override fun closeConnection() {
-//		_currentServerSocket?.close()
-//		_currentClientSocket?.close()
-//		_currentServerSocket = null
-//		_currentClientSocket = null
-		_clientSocketByAddress.forEach { (_, socket) ->
-			try {
-				socket.close()
-			}
-			catch (e: IOException) {
-				println("$$$ BluetoothControllerImpl.closeConnection() error closing socket: ${e.message}")
-			}
-		}
-		_clientSocketByAddress.clear()
-		_connectionState.value = BluetoothController.ConnectionState.Disconnected
-		updateDevices()
-		println("$$$ BluetoothControllerImpl.closeConnection() called")
 	}
 
 	private fun updateDevices() {
@@ -492,14 +476,9 @@ class BluetoothControllerImpl(
 
 			buildList {
 				devices.forEach { device ->
-					val androidDevice = pairedAndroidDevices.find { it.address == device.address }
+					val androidDevice = pairedAndroidDevices.find { it.address == device.address } ?: return@forEach
 					val updatedDevice = device.copy(
-						pairingState = when (androidDevice?.bondState) {
-							AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
-							AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
-							AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
-							else -> BluetoothDevice.PairingState.None
-						},
+						pairingState = getPairingStateFromAndroidDevice(androidDevice),
 					)
 					add(updatedDevice)
 				}
@@ -507,20 +486,15 @@ class BluetoothControllerImpl(
 				val devicesAddresses = devices.map { it.address }
 				println("$$$ devicesAddresses = $devicesAddresses")
 				pairedAndroidDevices.forEach { androidDevice ->
-					println("$$$ BluetoothControllerImpl.updateDevices() androidDevice = ${androidDevice.name}, ${androidDevice.address}")
+					//println("$$$ BluetoothControllerImpl.updateDevices() androidDevice = ${androidDevice.name}, ${androidDevice.address}")
 					if (androidDevice.address !in devicesAddresses) {
 						val newDevice = BluetoothDevice(
 							name = androidDevice.name,
 							address = androidDevice.address,
-							pairingState = when (androidDevice.bondState) {
-								AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
-								AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
-								AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
-								else -> BluetoothDevice.PairingState.None
-							},
-							isConnected = false,
+							pairingState = getPairingStateFromAndroidDevice(androidDevice),
+							connectionState = BluetoothDevice.ConnectionState.Disconnected,
 						)
-						println("$$$ BluetoothControllerImpl.updateDevices() adding new device: $newDevice")
+						//println("$$$ BluetoothControllerImpl.updateDevices() adding new device: $newDevice")
 						add(newDevice)
 					}
 				}
@@ -528,26 +502,26 @@ class BluetoothControllerImpl(
 		}
 	}
 
-	private fun BluetoothSocket.listenForIncomingData(): Flow<ByteArray> {
-		if (!isConnected) {
-			return emptyFlow()
-		}
-		return flow {
-			while (true) {
-				val buffer = ByteArray(32)
-				try {
-					inputStream.read(buffer)
-				}
-				catch (e: IOException) {
-					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
-					break
-				}
-
-				println("$$$ BluetoothControllerImpl.listenForIncomingData() buffer = ${buffer.contentToString()}")
-				emit(buffer)
-			}
-		}.flowOn(Dispatchers.IO)
-	}
+//	private fun BluetoothSocket.listenForIncomingData(): Flow<ByteArray> {
+//		if (!isConnected) {
+//			return emptyFlow()
+//		}
+//		return flow {
+//			while (true) {
+//				val buffer = ByteArray(32)
+//				try {
+//					inputStream.read(buffer)
+//				}
+//				catch (e: IOException) {
+//					println("$$$ BluetoothControllerImpl.listenForIncomingData() IOException: ${e.message}")
+//					break
+//				}
+//
+//				println("$$$ BluetoothControllerImpl.listenForIncomingData() buffer = ${buffer.contentToString()}")
+//				emit(buffer)
+//			}
+//		}.flowOn(Dispatchers.IO)
+//	}
 
 	private fun BluetoothSocket.listenForIncomingString(): Flow<String> {
 		if (!isConnected) {
@@ -568,8 +542,6 @@ class BluetoothControllerImpl(
 					break
 				}
 			}
-		}.onCompletion {
-			closeConnection()
 		}.flowOn(Dispatchers.IO)
 	}
 
@@ -594,12 +566,21 @@ class BluetoothControllerImpl(
 		}
 	}
 
+	private fun getPairingStateFromAndroidDevice(androidDevice: AndroidBluetoothDevice): BluetoothDevice.PairingState {
+		return when (androidDevice.bondState) {
+			AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
+			AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
+			AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
+			else -> BluetoothDevice.PairingState.None
+		}
+	}
+
 	override fun onAppEnteredForeground() {
 		updateDevices()
 	}
 
 	override fun onAppEnteredBackground() {
-		// no-op$
+		// no-op
 	}
 
 	override fun onServiceRegistered() {
@@ -651,18 +632,6 @@ class BluetoothControllerImpl(
 		context.unregisterReceiver(_bluetoothDeviceConnectionReceiver)
 		context.unregisterReceiver(_bondStateChangeReceiver)
 	}
-
-	override fun toBundle(): StateBundle {
-		return StateBundle().apply {
-			putString("launcherKey", _launcherKey)
-		}
-	}
-
-	override fun fromBundle(bundle: StateBundle?) {
-		val stateBundle = bundle ?: return
-		_launcherKey = stateBundle.getString("launcherKey") ?: UUID.randomUUID().toString()
-	}
-
 
 	companion object {
 		private const val SdpRecordName = "chat_service"

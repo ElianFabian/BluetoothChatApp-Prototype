@@ -10,25 +10,20 @@ interface BluetoothController {
 
 	val state: StateFlow<BluetoothState>
 	val isScanning: StateFlow<Boolean>
+	val isWaitingForConnection: StateFlow<Boolean>
 
-	//	val scannedDevices: StateFlow<List<BluetoothDevice>>
-//	val pairedDevices: StateFlow<List<BluetoothDevice>>
-	val connectionState: StateFlow<ConnectionState>
 	val devices: StateFlow<List<BluetoothDevice>>
-	val pairingState: StateFlow<PairingState>
 
 	fun startScan()
 	fun stopScan()
 
 	suspend fun startBluetoothServer(): ConnectionResult
+	fun stopBluetoothServer()
 	suspend fun connectToDevice(address: String): ConnectionResult
 	suspend fun disconnectFromDevice(address: String): Boolean
 	fun listenMessagesFrom(address: String): Flow<BluetoothMessage>
 
 	suspend fun trySendMessage(address: String, message: String): BluetoothMessage?
-
-
-	fun closeConnection()
 
 	enum class BluetoothState {
 		On,
@@ -37,18 +32,6 @@ interface BluetoothController {
 		TurningOff;
 
 		val isOn: Boolean get() = this == On
-	}
-
-	enum class ConnectionState {
-		Connected,
-		Connecting,
-		Disconnected,
-	}
-
-	enum class PairingState {
-		Paired,
-		Pairing,
-		None,
 	}
 
 	sealed interface ConnectionResult {

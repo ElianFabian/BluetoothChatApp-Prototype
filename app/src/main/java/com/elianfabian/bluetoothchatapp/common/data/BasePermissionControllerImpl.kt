@@ -15,40 +15,34 @@ import com.elianfabian.bluetoothchatapp.common.domain.MultiplePermissionControll
 import com.elianfabian.bluetoothchatapp.common.domain.PermissionController
 import com.elianfabian.bluetoothchatapp.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
-import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.simplestack.ScopedServices
-import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.UUID
-import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
 abstract class BasePermissionControllerImpl(
 	private val mainActivityHolder: MainActivityHolder,
 ) : PermissionController,
 	ApplicationBackgroundStateChangeCallback,
-	Bundleable,
 	ScopedServices.Registered {
 
 	abstract val permissionName: String
-
-	private var _launcherKey = UUID.randomUUID().toString()
-
 
 	private val _state by lazy { MutableStateFlow(getCurrentState()) }
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<String> by lazy {
 		mainActivityHolder.mainActivity.activityResultRegistry.register(
-			key = _launcherKey,
+			key = UUID.randomUUID().toString(),
 			contract = ActivityResultContracts.RequestPermission(),
 			callback = {
 				val result = getCurrentState()
 				_state.value = result
 				_resultContinuation?.resume(result)
+				_resultContinuation = null
 			},
 		)
 	}
@@ -61,6 +55,12 @@ abstract class BasePermissionControllerImpl(
 	}
 
 	override suspend fun awaitResult(): PermissionState {
+		if (getCurrentState() == PermissionState.Granted) {
+			return PermissionState.Granted
+		}
+		check(_resultContinuation == null) {
+			"Already waiting for a result"
+		}
 		return suspendCancellableCoroutine { continuation ->
 			_resultContinuation = continuation
 		}
@@ -90,42 +90,28 @@ abstract class BasePermissionControllerImpl(
 		_resultContinuation?.cancel()
 		_resultContinuation = null
 	}
-
-	override fun fromBundle(bundle: StateBundle?) {
-		val stateBundle = bundle ?: return
-
-		_launcherKey = stateBundle.getString("launcherKey") ?: UUID.randomUUID().toString()
-	}
-
-	override fun toBundle(): StateBundle {
-		return StateBundle().apply {
-			putString("launcherKey", _launcherKey)
-		}
-	}
 }
 
 abstract class BaseMultiplePermissionControllerImpl(
 	private val mainActivityHolder: MainActivityHolder,
 ) : MultiplePermissionController,
 	ApplicationBackgroundStateChangeCallback,
-	Bundleable,
 	ScopedServices.Registered {
 
 	abstract val permissionNames: List<String>
-
-	private var _uuid = UUID.randomUUID().toString()
 
 	private val _state by lazy { MutableStateFlow(getCurrentState()) }
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<Array<String>> by lazy {
 		mainActivityHolder.mainActivity.activityResultRegistry.register(
-			key = _uuid,
+			key = UUID.randomUUID().toString(),
 			contract = ActivityResultContracts.RequestMultiplePermissions(),
 			callback = {
 				val result = getCurrentState()
 				_state.value = result
 				_resultContinuation?.resume(result)
+				_resultContinuation = null
 			},
 		)
 	}
@@ -138,6 +124,12 @@ abstract class BaseMultiplePermissionControllerImpl(
 	}
 
 	override suspend fun awaitResult(): Map<String, PermissionState> {
+		if (getCurrentState().all { it.value == PermissionState.Granted }) {
+			return getCurrentState()
+		}
+		check(_resultContinuation == null) {
+			"Already waiting for a result"
+		}
 		return suspendCancellableCoroutine { continuation ->
 			_resultContinuation = continuation
 		}
@@ -167,18 +159,6 @@ abstract class BaseMultiplePermissionControllerImpl(
 		_launcher.unregister()
 		_resultContinuation?.cancel()
 		_resultContinuation = null
-	}
-
-	override fun fromBundle(bundle: StateBundle?) {
-		val stateBundle = bundle ?: return
-
-		_uuid = stateBundle.getString("uuid") ?: UUID.randomUUID().toString()
-	}
-
-	override fun toBundle(): StateBundle {
-		return StateBundle().apply {
-			putString("uuid", _uuid)
-		}
 	}
 }
 

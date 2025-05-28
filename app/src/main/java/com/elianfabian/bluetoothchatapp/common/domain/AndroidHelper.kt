@@ -14,4 +14,6 @@ interface AndroidHelper {
 
 	fun makeDeviceDiscoverable(callback: (accepted: Boolean) -> Unit)
 	fun showEnableBluetoothDialog(callback: (enabled: Boolean) -> Unit)
+
+	fun closeKeyboard()
 }

@@ -1,8 +1,8 @@
 package com.elianfabian.bluetoothchatapp.home.presentation.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,13 +15,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -110,7 +114,10 @@ fun DeviceScreen(
 					WindowInsets.safeDrawing
 						.asPaddingValues()
 				)
-				.padding(all = 16.dp)
+				.padding(
+					horizontal = 16.dp,
+					vertical = 4.dp,
+				)
 		) {
 			if (!state.isBluetoothOn) {
 				Text(
@@ -124,34 +131,37 @@ fun DeviceScreen(
 				modifier = Modifier
 					.fillMaxWidth()
 			) {
-				Button(
-					onClick = {
-						onAction(HomeAction.SendMessage)
-					},
+				Text(text = "Target device address: ${state.targetDeviceAddress ?: "None"}")
+				Row(
+					verticalAlignment = Alignment.Top,
+					modifier = Modifier.fillMaxWidth()
 				) {
-					Text("Send")
+					TextField(
+						value = state.enteredMessage,
+						onValueChange = { value ->
+							onAction(HomeAction.EnterMessage(value))
+						},
+						placeholder = {
+							Text("Message to send")
+						},
+						modifier = Modifier
+							.weight(1f)
+					)
+					IconButton(
+						onClick = {
+							onAction(HomeAction.SendMessage)
+						},
+						modifier = Modifier
+							.size(56.dp)
+					) {
+						Icon(
+							imageVector = Icons.AutoMirrored.Filled.Send,
+							contentDescription = null,
+						)
+					}
 				}
-				TextField(
-					value = state.enteredTargetDeviceAddress,
-					onValueChange = { value ->
-						onAction(HomeAction.EnterMessage(value))
-					},
-					placeholder = {
-						Text("Target device address")
-					},
-				)
-				TextField(
-					value = state.enteredMessage,
-					onValueChange = { value ->
-						onAction(HomeAction.EnterMessage(value))
-					},
-					placeholder = {
-						Text("Message to send")
-					},
-				)
 			}
-			Text("Device name: ${state.bluetoothDeviceName}")
-			Text("Connection state: ${state.connectionState}")
+			Text("Device name: '${state.bluetoothDeviceName}'")
 			Row {
 				Button(
 					onClick = {
@@ -179,11 +189,11 @@ fun DeviceScreen(
 			Spacer(modifier = Modifier.height(16.dp))
 			BluetoothDeviceList(
 				state = state,
-				onConnectedDeviceClick = { device ->
-					onAction(HomeAction.ClickConnectedDevice(device))
-				},
 				onPairedDeviceClick = { device ->
 					onAction(HomeAction.ClickPairedDevice(device))
+				},
+				onPairedDeviceLongClick = { device ->
+					onAction(HomeAction.LongClickPairedDevice(device))
 				},
 				onScannedDeviceClick = { device ->
 					onAction(HomeAction.ClickScannedDevice(device))
@@ -211,12 +221,32 @@ fun DeviceScreen(
 				) {
 					Text(text = "Stop scan")
 				}
-				Button(
-					onClick = {
-						onAction(HomeAction.StartServer)
+				AnimatedContent(state.isWaitingForConnection, contentAlignment = Alignment.Center) { isWaitingForConnection ->
+					Button(
+						onClick = {
+							if (isWaitingForConnection) {
+								onAction(HomeAction.StopServer)
+							}
+							else {
+								onAction(HomeAction.StartServer)
+							}
+						},
+					) {
+						if (isWaitingForConnection) {
+							CircularProgressIndicator(
+								color = MaterialTheme.colorScheme.onPrimary,
+								strokeWidth = 3.dp,
+								modifier = Modifier.size(20.dp)
+							)
+							Spacer(Modifier.width(8.dp))
+						}
+						Text(
+							text = if (isWaitingForConnection) {
+								"Stop server"
+							}
+							else "Start server",
+						)
 					}
-				) {
-					Text(text = "Start server")
 				}
 			}
 		}
@@ -227,8 +257,8 @@ fun DeviceScreen(
 private fun BluetoothDeviceList(
 	modifier: Modifier = Modifier,
 	state: HomeState,
-	onConnectedDeviceClick: (device: BluetoothDevice) -> Unit,
 	onPairedDeviceClick: (device: BluetoothDevice) -> Unit,
+	onPairedDeviceLongClick: (device: BluetoothDevice) -> Unit,
 	onScannedDeviceClick: (device: BluetoothDevice) -> Unit,
 ) {
 	val lazyListState = rememberLazyListState()
@@ -245,27 +275,6 @@ private fun BluetoothDeviceList(
 	) {
 		item {
 			Text(
-				text = "Connected devices",
-				fontWeight = FontWeight.Bold,
-				fontSize = 24.sp,
-			)
-		}
-		items(state.connectedDevices) { device ->
-			BluetoothDeviceItem(
-				name = device.name,
-				address = device.address,
-				isConnected = device.isConnected,
-				pairingState = device.pairingState,
-				onClick = {
-					onConnectedDeviceClick(device)
-				},
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(vertical = 6.dp)
-			)
-		}
-		item {
-			Text(
 				text = "Paired devices",
 				fontWeight = FontWeight.Bold,
 				fontSize = 24.sp,
@@ -275,10 +284,13 @@ private fun BluetoothDeviceList(
 			BluetoothDeviceItem(
 				name = device.name,
 				address = device.address,
-				isConnected = device.isConnected,
+				connectionState = device.connectionState,
 				pairingState = device.pairingState,
 				onClick = {
 					onPairedDeviceClick(device)
+				},
+				onLongClick = {
+					onPairedDeviceLongClick(device)
 				},
 				modifier = Modifier
 					.fillMaxWidth()
@@ -311,10 +323,13 @@ private fun BluetoothDeviceList(
 			BluetoothDeviceItem(
 				name = device.name,
 				address = device.address,
-				isConnected = device.isConnected,
+				connectionState = device.connectionState,
 				pairingState = device.pairingState,
 				onClick = {
 					onScannedDeviceClick(device)
+				},
+				onLongClick = {
+					// no-op
 				},
 				modifier = Modifier
 					.fillMaxWidth()
@@ -330,11 +345,11 @@ private fun BluetoothDeviceList(
 			)
 		}
 		items(state.messages) { message ->
-			Text(
-				text = message.content,
-				color = if (message.isFromLocalUser) Color.Blue else Color.Green,
-				modifier = Modifier
-					.padding(vertical = 6.dp)
+			Message(
+				senderName = message.senderName,
+				isFromLocalUser = message.isFromLocalUser,
+				content = message.content,
+				senderAddress = message.senderAddress,
 			)
 		}
 	}
@@ -344,9 +359,10 @@ private fun BluetoothDeviceList(
 private fun BluetoothDeviceItem(
 	name: String?,
 	address: String,
-	isConnected: Boolean,
+	connectionState: BluetoothDevice.ConnectionState,
 	pairingState: BluetoothDevice.PairingState,
 	onClick: () -> Unit,
+	onLongClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	Row(
@@ -354,9 +370,14 @@ private fun BluetoothDeviceItem(
 			.clip(RoundedCornerShape(8.dp))
 			.background(MaterialTheme.colorScheme.surfaceVariant)
 			.padding(12.dp)
-			.clickable {
-				onClick()
-			}
+			.combinedClickable(
+				onClick = {
+					onClick()
+				},
+				onLongClick = {
+					onLongClick()
+				},
+			)
 	) {
 		if (pairingState == BluetoothDevice.PairingState.Pairing) {
 			CircularProgressIndicator(
@@ -378,13 +399,77 @@ private fun BluetoothDeviceItem(
 				text = address,
 				fontSize = 18.sp,
 				lineHeight = 30.sp,
-				color = if (isConnected) Color.Green else MaterialTheme.colorScheme.onSurfaceVariant,
+				color = when (connectionState) {
+					BluetoothDevice.ConnectionState.Connected -> Color.Green
+					BluetoothDevice.ConnectionState.Connecting -> Color.Yellow
+					BluetoothDevice.ConnectionState.Disconnected -> Color.LightGray
+					BluetoothDevice.ConnectionState.Disconnecting -> Color.Red
+				},
 			)
 		}
 	}
 }
 
-@Preview(showBackground = true)
+@Composable
+private fun Message(
+	senderName: String?,
+	senderAddress: String,
+	isFromLocalUser: Boolean,
+	content: String,
+	modifier: Modifier = Modifier,
+) {
+	val backgroundColor = if (isFromLocalUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+	val textColor = if (isFromLocalUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+
+	Row(
+		horizontalArrangement = if (isFromLocalUser) Arrangement.End else Arrangement.Start,
+		modifier = modifier
+			.fillMaxWidth()
+	) {
+		Column(
+			modifier = Modifier
+				.background(backgroundColor, shape = RoundedCornerShape(12.dp))
+				.padding(12.dp)
+				.widthIn(max = 280.dp)
+		) {
+//			if (!senderName.isNullOrEmpty() || !senderAddress.isNullOrEmpty()) {
+//				Text(
+//					text = listOfNotNull(senderName, senderAddress).joinToString(" • "),
+//					style = MaterialTheme.typography.labelMedium,
+//					color = textColor.copy(alpha = 0.7f),
+//					maxLines = 1,
+//					overflow = TextOverflow.Ellipsis
+//				)
+//				Spacer(modifier = Modifier.height(4.dp))
+
+			if (senderAddress.isNotBlank() && !isFromLocalUser) {
+				Text(
+					text = if (senderName != null) {
+						"$senderName · $senderAddress"
+					}
+					else senderAddress,
+					style = MaterialTheme.typography.labelMedium,
+					color = textColor.copy(alpha = 0.7f),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+				Spacer(modifier = Modifier.height(4.dp))
+			}
+			Text(
+				text = content,
+				style = MaterialTheme.typography.bodyMedium,
+				color = textColor
+			)
+		}
+	}
+}
+
+@Preview(
+	showBackground = true,
+	widthDp = 392,
+	heightDp = 785,
+	fontScale = 1.4F,
+)
 @Composable
 private fun Preview() = BasePreview {
 
@@ -398,7 +483,7 @@ private fun Preview() = BasePreview {
 		BluetoothDevice(
 			name = name,
 			address = "123:45:67:89:AB:$name",
-			isConnected = false,
+			connectionState = BluetoothDevice.ConnectionState.Disconnected,
 			pairingState = when (Random.nextInt(0, 3)) {
 				0 -> BluetoothDevice.PairingState.Paired
 				1 -> BluetoothDevice.PairingState.Pairing
@@ -441,6 +526,7 @@ private fun Preview() = BasePreview {
 					content = s,
 					isFromLocalUser = index % 2 == 0,
 					senderName = null,
+					senderAddress = "XX:60:E2:XX:98:XX",
 				)
 			}
 		),

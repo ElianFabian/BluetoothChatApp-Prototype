@@ -4,7 +4,7 @@ data class BluetoothDevice(
 	val name: String?,
 	val address: String,
 	val pairingState: PairingState,
-	val isConnected: Boolean,
+	val connectionState: ConnectionState,
 ) {
 	enum class PairingState {
 		None,
@@ -12,5 +12,12 @@ data class BluetoothDevice(
 		Paired;
 
 		val isPaired: Boolean get() = this == Paired
+	}
+
+	enum class ConnectionState {
+		Connected,
+		Connecting,
+		Disconnected,
+		Disconnecting,
 	}
 }

@@ -11,10 +11,12 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.getSystemService
 import com.elianfabian.bluetoothchatapp.common.domain.AndroidHelper
 import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
@@ -25,6 +27,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.util.UUID
 import kotlin.properties.ReadOnlyProperty
@@ -115,6 +118,13 @@ class AndroidHelperImpl(
 		)
 
 		launcher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+	}
+
+	override fun closeKeyboard() {
+		activity.currentFocus?.also { focus ->
+			val inputMethodManager = context.getSystemService<InputMethodManager>() ?: return
+			inputMethodManager.hideSoftInputFromWindow(focus.windowToken, 0)
+		}
 	}
 
 
