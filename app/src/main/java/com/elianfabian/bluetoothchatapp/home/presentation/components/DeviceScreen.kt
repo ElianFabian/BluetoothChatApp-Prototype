@@ -1,6 +1,6 @@
 package com.elianfabian.bluetoothchatapp.home.presentation.components
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,7 +23,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -217,36 +215,37 @@ fun DeviceScreen(
 				Button(
 					onClick = {
 						onAction(HomeAction.StopScan)
-					}
+					},
 				) {
 					Text(text = "Stop scan")
 				}
-				AnimatedContent(state.isWaitingForConnection, contentAlignment = Alignment.Center) { isWaitingForConnection ->
-					Button(
-						onClick = {
-							if (isWaitingForConnection) {
-								onAction(HomeAction.StopServer)
-							}
-							else {
-								onAction(HomeAction.StartServer)
-							}
-						},
-					) {
-						if (isWaitingForConnection) {
-							CircularProgressIndicator(
-								color = MaterialTheme.colorScheme.onPrimary,
-								strokeWidth = 3.dp,
-								modifier = Modifier.size(20.dp)
-							)
-							Spacer(Modifier.width(8.dp))
+				Button(
+					onClick = {
+						println("$$$ onClick")
+						if (state.isWaitingForConnection) {
+							println("$$$ stopServer")
+							onAction(HomeAction.StopServer)
 						}
-						Text(
-							text = if (isWaitingForConnection) {
-								"Stop server"
-							}
-							else "Start server",
+						else {
+							println("$$$ startServer")
+							onAction(HomeAction.StartServer)
+						}
+					},
+				) {
+					if (state.isWaitingForConnection) {
+						CircularProgressIndicator(
+							color = MaterialTheme.colorScheme.onPrimary,
+							strokeWidth = 3.dp,
+							modifier = Modifier.size(20.dp)
 						)
+						Spacer(Modifier.width(8.dp))
 					}
+					Text(
+						text = if (state.isWaitingForConnection) {
+							"Stop server"
+						}
+						else "Start server",
+					)
 				}
 			}
 		}
@@ -432,16 +431,6 @@ private fun Message(
 				.padding(12.dp)
 				.widthIn(max = 280.dp)
 		) {
-//			if (!senderName.isNullOrEmpty() || !senderAddress.isNullOrEmpty()) {
-//				Text(
-//					text = listOfNotNull(senderName, senderAddress).joinToString(" • "),
-//					style = MaterialTheme.typography.labelMedium,
-//					color = textColor.copy(alpha = 0.7f),
-//					maxLines = 1,
-//					overflow = TextOverflow.Ellipsis
-//				)
-//				Spacer(modifier = Modifier.height(4.dp))
-
 			if (senderAddress.isNotBlank() && !isFromLocalUser) {
 				Text(
 					text = if (senderName != null) {
