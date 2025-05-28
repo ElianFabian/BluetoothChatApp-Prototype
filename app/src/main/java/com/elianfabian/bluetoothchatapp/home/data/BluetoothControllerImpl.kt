@@ -20,7 +20,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -83,21 +82,14 @@ class BluetoothControllerImpl(
 
 	private val _deviceFoundReceiver = DeviceFoundBroadcastReceiver(
 		onDeviceFound = { androidDevice ->
-			//println("$$$ BluetoothControllerImpl.onDeviceFound() androidDevice = $androidDevice")
 			_devices.update { devices ->
 				val existingDevice = devices.find { it.address == androidDevice.address }
 				if (existingDevice != null) {
-					// Update existing device
 					devices.map { device ->
 						if (device.address == androidDevice.address) {
 							device.copy(
 								name = androidDevice.name ?: device.name,
-								pairingState = when (androidDevice.bondState) {
-									AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
-									AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
-									AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
-									else -> BluetoothDevice.PairingState.None
-								},
+								pairingState = getPairingStateFromAndroidDevice(androidDevice),
 							)
 						}
 						else device
@@ -107,12 +99,7 @@ class BluetoothControllerImpl(
 					devices + BluetoothDevice(
 						name = androidDevice.name,
 						address = androidDevice.address,
-						pairingState = when (androidDevice.bondState) {
-							AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
-							AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
-							AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
-							else -> BluetoothDevice.PairingState.None
-						},
+						pairingState = getPairingStateFromAndroidDevice(androidDevice),
 						connectionState = BluetoothDevice.ConnectionState.Disconnected,
 					)
 				}
@@ -165,35 +152,19 @@ class BluetoothControllerImpl(
 	)
 
 	private val _bondStateChangeReceiver = DeviceBondStateChangeBroadcastReceiver(
-		onStateChange = { device, state ->
-			println("$$$ BluetoothControllerImpl.onBondStateChange() device(name=${device.name}, address=${device.address}), state=$state")
+		onStateChange = { androidDevice, state ->
+			println("$$$ BluetoothControllerImpl.onBondStateChange() device(name=${androidDevice.name}, address=${androidDevice.address}), state=$state")
 			_devices.update { devices ->
 				devices.map { existingDevice ->
-					if (existingDevice.address == device.address) {
+					if (existingDevice.address == androidDevice.address) {
 						existingDevice.copy(
-							name = device.name ?: existingDevice.name,
-							pairingState = when (state) {
-								AndroidBluetoothDevice.BOND_BONDED -> BluetoothDevice.PairingState.Paired
-								AndroidBluetoothDevice.BOND_BONDING -> BluetoothDevice.PairingState.Pairing
-								AndroidBluetoothDevice.BOND_NONE -> BluetoothDevice.PairingState.None
-								else -> BluetoothDevice.PairingState.None
-							},
+							name = androidDevice.name ?: existingDevice.name,
+							pairingState = getPairingStateFromAndroidDevice(androidDevice),
 						)
 					}
 					else existingDevice
 				}
 			}
-//			when (state) {
-//				AndroidBluetoothDevice.BOND_BONDED -> {
-//					_paringState.value = BluetoothController.PairingState.Paired
-//				}
-//				AndroidBluetoothDevice.BOND_BONDING -> {
-//					_paringState.value = BluetoothController.PairingState.Pairing
-//				}
-//				AndroidBluetoothDevice.BOND_NONE -> {
-//					_paringState.value = BluetoothController.PairingState.None
-//				}
-//			}
 		}
 	)
 
@@ -226,7 +197,6 @@ class BluetoothControllerImpl(
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
-		println("$$$ bluetoothOn: ${_bluetoothState.value.isOn}")
 		if (!_bluetoothState.value.isOn) {
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
@@ -238,11 +208,9 @@ class BluetoothControllerImpl(
 			SdpRecordName,
 			SdpRecordUuid,
 		)
-		println("$$$ serverSocket = $serverSocket")
 		_serverSocket = serverSocket
 
 		val clientSocket = serverSocket.tryAccept()
-		println("$$$ clientSocket = $clientSocket")
 		if (clientSocket == null) {
 			_isWaitingForConnection.value = false
 			serverSocket.close()
@@ -308,7 +276,6 @@ class BluetoothControllerImpl(
 		}
 
 		val isConnectionSuccessFull = clientSocket.tryConnect()
-		println("$$$ connectionSuccessFull = $isConnectionSuccessFull, isConnected = ${clientSocket.isConnected}, remoteDevice = ${clientSocket.remoteDevice}")
 		if (!isConnectionSuccessFull) {
 			_devices.update { devices ->
 				devices.map { device ->
@@ -487,9 +454,7 @@ class BluetoothControllerImpl(
 				}
 
 				val devicesAddresses = devices.map { it.address }
-				println("$$$ devicesAddresses = $devicesAddresses")
 				pairedAndroidDevices.forEach { androidDevice ->
-					//println("$$$ BluetoothControllerImpl.updateDevices() androidDevice = ${androidDevice.name}, ${androidDevice.address}")
 					if (androidDevice.address !in devicesAddresses) {
 						val newDevice = BluetoothDevice(
 							name = androidDevice.name,
@@ -497,7 +462,6 @@ class BluetoothControllerImpl(
 							pairingState = getPairingStateFromAndroidDevice(androidDevice),
 							connectionState = BluetoothDevice.ConnectionState.Disconnected,
 						)
-						//println("$$$ BluetoothControllerImpl.updateDevices() adding new device: $newDevice")
 						add(newDevice)
 					}
 				}
