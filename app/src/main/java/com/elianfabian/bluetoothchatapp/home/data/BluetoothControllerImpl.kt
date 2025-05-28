@@ -226,6 +226,7 @@ class BluetoothControllerImpl(
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
+		println("$$$ bluetoothOn: ${_bluetoothState.value.isOn}")
 		if (!_bluetoothState.value.isOn) {
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
@@ -237,9 +238,11 @@ class BluetoothControllerImpl(
 			SdpRecordName,
 			SdpRecordUuid,
 		)
+		println("$$$ serverSocket = $serverSocket")
 		_serverSocket = serverSocket
 
 		val clientSocket = serverSocket.tryAccept()
+		println("$$$ clientSocket = $clientSocket")
 		if (clientSocket == null) {
 			_isWaitingForConnection.value = false
 			serverSocket.close()
@@ -631,6 +634,11 @@ class BluetoothControllerImpl(
 		context.unregisterReceiver(_bluetoothStateChangeReceiver)
 		context.unregisterReceiver(_bluetoothDeviceConnectionReceiver)
 		context.unregisterReceiver(_bondStateChangeReceiver)
+
+		_clientSocketByAddress.forEach { (_, socket) ->
+			socket.close()
+		}
+		_clientSocketByAddress.clear()
 	}
 
 	companion object {
