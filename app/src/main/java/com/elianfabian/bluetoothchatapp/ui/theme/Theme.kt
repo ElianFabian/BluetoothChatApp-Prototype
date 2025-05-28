@@ -57,6 +57,7 @@ fun BluetoothChatAppTheme(
 	// Fragments, when we put the app in the background and then come back
 	// we had to click anywhere before being able to get click events, like in buttons for example.
 	// At the Activity level this was not a problem.
+	// This happened on Pixel 8 Pro API 35, but not on Realme 6 API 30
 	val interactionSource = remember { MutableInteractionSource() }
 
 	Box(
