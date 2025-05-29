@@ -11,7 +11,6 @@ import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -114,7 +113,9 @@ class HomeViewModel(
 				androidHelper.openDeviceInfoSettings()
 			}
 			is HomeAction.MakeDeviceDiscoverable -> {
-				androidHelper.makeDeviceDiscoverable {}
+				registeredScope.launch {
+					androidHelper.showMakeDeviceDiscoverableDialog()
+				}
 			}
 			is HomeAction.SendMessage -> {
 				val targetDeviceAddress = _targetDeviceAddress.value
@@ -229,15 +230,11 @@ class HomeViewModel(
 			&& !bluetoothController.state.value.isOn
 			&& result.values.all { it == PermissionState.Granted }
 		if (shouldShowEnableBluetoothDialog) {
-			androidHelper.showEnableBluetoothDialog { enabled ->
-				if (enabled) {
-					registeredScope.launch {
-						action()
-					}
-				}
-				else {
-					androidHelper.showToast("Please, enable Bluetooth to listen for bluetooth connections.")
-				}
+			if (androidHelper.showEnableBluetoothDialog()) {
+				action()
+			}
+			else {
+				androidHelper.showToast("Please, enable Bluetooth to listen for bluetooth connections.")
 			}
 		}
 		else {

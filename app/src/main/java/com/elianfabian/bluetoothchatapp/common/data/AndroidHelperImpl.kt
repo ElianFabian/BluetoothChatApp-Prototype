@@ -23,13 +23,16 @@ import androidx.fragment.app.FragmentActivity
 import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.UUID
+import kotlin.coroutines.resume
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -96,11 +99,11 @@ class AndroidHelperImpl(
 		context.startActivity(intent)
 	}
 
-	override fun makeDeviceDiscoverable(callback: (accepted: Boolean) -> Unit) {
+	override suspend fun showMakeDeviceDiscoverableDialog() = suspendCancellableCoroutine { continuation ->
 		val launcher = createLauncher(
 			contract = ActivityResultContracts.StartActivityForResult(),
 			callback = { result ->
-				callback(result.resultCode == Activity.RESULT_OK)
+				continuation.resume(result.resultCode == Activity.RESULT_OK)
 			},
 		)
 		val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
@@ -109,11 +112,11 @@ class AndroidHelperImpl(
 		launcher.launch(intent)
 	}
 
-	override fun showEnableBluetoothDialog(callback: (enabled: Boolean) -> Unit) {
+	override suspend fun showEnableBluetoothDialog(): Boolean = suspendCancellableCoroutine { continuation ->
 		val launcher = createLauncher(
 			contract = ActivityResultContracts.StartActivityForResult(),
 			callback = { result ->
-				callback(result.resultCode == Activity.RESULT_OK)
+				continuation.resume(result.resultCode == Activity.RESULT_OK)
 			},
 		)
 
