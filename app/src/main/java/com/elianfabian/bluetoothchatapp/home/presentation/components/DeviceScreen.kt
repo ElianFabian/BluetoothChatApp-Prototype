@@ -183,13 +183,10 @@ fun DeviceScreen(
 				) {
 					Button(
 						onClick = {
-							println("$$$ onClick scan: ${state.isScanning}")
 							if (state.isScanning) {
-								println("$$$ stop scan")
 								onAction(HomeAction.StopScan)
 							}
 							else {
-								println("$$$ start scan")
 								onAction(HomeAction.StartScan)
 							}
 						}
@@ -214,13 +211,10 @@ fun DeviceScreen(
 					}
 					Button(
 						onClick = {
-							println("$$$ onClick server")
 							if (state.isWaitingForConnection) {
-								println("$$$ stopServer")
 								onAction(HomeAction.StopServer)
 							}
 							else {
-								println("$$$ startServer")
 								onAction(HomeAction.StartServer)
 							}
 						},

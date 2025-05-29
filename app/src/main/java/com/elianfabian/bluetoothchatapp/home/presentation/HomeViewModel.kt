@@ -77,7 +77,16 @@ class HomeViewModel(
 			is HomeAction.StartScan -> {
 				registeredScope.launch {
 					executeIfBluetoothRequirementsAreSatisfied {
-						bluetoothController.startScan()
+						if (!bluetoothController.startScan()) {
+							// In some devices, at least for API level 29, if this returns false we likely
+							// need to turn on location
+							if (androidHelper.showEnableLocationDialog()) {
+								bluetoothController.startScan()
+							}
+							else {
+								androidHelper.showToast("Location is needed for scan to work")
+							}
+						}
 					}
 				}
 			}
@@ -88,7 +97,6 @@ class HomeViewModel(
 				registeredScope.launch {
 					executeIfBluetoothRequirementsAreSatisfied {
 						val result = bluetoothController.startBluetoothServer()
-						println("$$$ server-result = $result")
 						when (result) {
 							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 								_targetDeviceAddress.value = result.device.address
@@ -162,7 +170,6 @@ class HomeViewModel(
 				}
 				registeredScope.launch {
 					val result = bluetoothController.connectToDevice(action.device.address)
-					println("$$$ paired connect-result = $result")
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							_targetDeviceAddress.value = result.device.address
@@ -179,7 +186,6 @@ class HomeViewModel(
 			is HomeAction.ClickScannedDevice -> {
 				registeredScope.launch {
 					val result = bluetoothController.connectToDevice(action.device.address)
-					println("$$$ scanned connect-result = $result")
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->

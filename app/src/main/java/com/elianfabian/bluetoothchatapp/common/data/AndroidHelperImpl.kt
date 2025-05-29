@@ -4,6 +4,7 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
@@ -14,12 +15,20 @@ import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.getSystemService
 import com.elianfabian.bluetoothchatapp.common.domain.AndroidHelper
 import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.LocationSettingsStatusCodes
+import com.google.android.gms.location.Priority
 import com.zhuinden.simplestack.Bundleable
 import com.zhuinden.statebundle.StateBundle
 import kotlinx.coroutines.CoroutineScope
@@ -109,6 +118,9 @@ class AndroidHelperImpl(
 		val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
 			putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 60)
 		}
+		continuation.invokeOnCancellation {
+			launcher.unregister()
+		}
 		launcher.launch(intent)
 	}
 
@@ -119,8 +131,66 @@ class AndroidHelperImpl(
 				continuation.resume(result.resultCode == Activity.RESULT_OK)
 			},
 		)
-
+		continuation.invokeOnCancellation {
+			launcher.unregister()
+		}
 		launcher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+	}
+
+	override suspend fun showEnableLocationDialog(): Boolean = suspendCancellableCoroutine { continuation ->
+		// Source: https://developers.google.com/android/reference/com/google/android/gms/location/SettingsClient
+
+		val locationRequest = LocationRequest.Builder(Long.MAX_VALUE)
+			.setPriority(Priority.PRIORITY_LOW_POWER)
+			.build()
+
+		val client = LocationServices.getSettingsClient(activity)
+
+		val settingsRequest = LocationSettingsRequest.Builder()
+			.addLocationRequest(locationRequest)
+			.setAlwaysShow(true)
+			.build()
+
+		client.checkLocationSettings(settingsRequest)
+			.addOnCompleteListener { task ->
+				try {
+					val response = task.getResult(ApiException::class.java)
+				}
+				catch (exception: ApiException) {
+					when (exception.statusCode) {
+						LocationSettingsStatusCodes.RESOLUTION_REQUIRED -> {
+							try {
+								// Cast to a resolvable exception
+								val resolvable = exception as ResolvableApiException
+
+								// Show the dialog by calling startResolutionForResult(),
+								// and check the result in onActivityResult().
+								val launcher = createLauncher(
+									contract = ActivityResultContracts.StartIntentSenderForResult(),
+									callback = { result ->
+										continuation.resume(result.resultCode == Activity.RESULT_OK)
+									},
+								)
+
+								val intentSenderRequest = IntentSenderRequest.Builder(resolvable.resolution)
+									.build()
+								launcher.launch(intentSenderRequest)
+							}
+							catch (e: IntentSender.SendIntentException) {
+								// Ignore the error.
+							}
+							catch (e: ClassCastException) {
+								// Ignore, should be an impossible error.
+							}
+						}
+						LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE -> {
+							// Location settings are not satisfied. However, we have no way to fix the
+							// settings so we won't show the dialog.
+							continuation.resume(false)
+						}
+					}
+				}
+			}
 	}
 
 	override fun closeKeyboard() {

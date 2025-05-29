@@ -14,6 +14,7 @@ interface AndroidHelper {
 
 	suspend fun showMakeDeviceDiscoverableDialog(): Boolean
 	suspend fun showEnableBluetoothDialog(): Boolean
+	suspend fun showEnableLocationDialog(): Boolean
 
 	fun closeKeyboard()
 }

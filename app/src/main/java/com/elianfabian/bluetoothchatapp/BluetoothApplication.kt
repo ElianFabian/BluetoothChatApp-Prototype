@@ -56,13 +56,6 @@ class BluetoothApplication : Application(), OnMainBackstackIsInitializedCallback
 		super.onCreate()
 
 		println("$$$ app.onCreate")
-
-		val deviceName = Settings.Global.getString(contentResolver, "device_name")
-		val bluetoothName = Settings.Secure.getString(contentResolver, "bluetooth_name")
-		println("$$$$ deviceName = $deviceName, bluetoothName = $bluetoothName")
-
-		val bluetoothManager = getSystemService<BluetoothManager>() ?: return
-		println("$$$ discoverable = ${bluetoothManager.adapter?.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE}")
 	}
 
 

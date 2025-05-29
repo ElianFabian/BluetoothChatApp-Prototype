@@ -10,7 +10,6 @@ fun ByteBuffer.putString(str: String) {
 
 fun ByteBuffer.getString(): String {
     val length = getInt()
-    println("$$ getString.length = $length")
     val bytes = ByteArray(length)
     get(bytes)
     return String(bytes, Charsets.UTF_8)

@@ -14,8 +14,8 @@ interface BluetoothController {
 
 	val devices: StateFlow<List<BluetoothDevice>>
 
-	fun startScan()
-	fun stopScan()
+	fun startScan(): Boolean
+	fun stopScan(): Boolean
 
 	suspend fun startBluetoothServer(): ConnectionResult
 	fun stopBluetoothServer()

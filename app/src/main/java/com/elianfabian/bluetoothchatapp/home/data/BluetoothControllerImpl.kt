@@ -81,15 +81,15 @@ class BluetoothControllerImpl(
 	override val devices = _devices.asStateFlow()
 
 	private val _deviceFoundReceiver = DeviceFoundBroadcastReceiver(
-		onDeviceFound = { androidDevice ->
+		onDeviceFound = { androidDeviceFound ->
 			_devices.update { devices ->
-				val existingDevice = devices.find { it.address == androidDevice.address }
+				val existingDevice = devices.find { it.address == androidDeviceFound.address }
 				if (existingDevice != null) {
 					devices.map { device ->
-						if (device.address == androidDevice.address) {
+						if (device.address == androidDeviceFound.address) {
 							device.copy(
-								name = androidDevice.name ?: device.name,
-								pairingState = getPairingStateFromAndroidDevice(androidDevice),
+								name = androidDeviceFound.name ?: device.name,
+								pairingState = getPairingStateFromAndroidDevice(androidDeviceFound),
 							)
 						}
 						else device
@@ -97,9 +97,9 @@ class BluetoothControllerImpl(
 				}
 				else {
 					devices + BluetoothDevice(
-						name = androidDevice.name,
-						address = androidDevice.address,
-						pairingState = getPairingStateFromAndroidDevice(androidDevice),
+						name = androidDeviceFound.name,
+						address = androidDeviceFound.address,
+						pairingState = getPairingStateFromAndroidDevice(androidDeviceFound),
 						connectionState = BluetoothDevice.ConnectionState.Disconnected,
 					)
 				}
@@ -136,7 +136,6 @@ class BluetoothControllerImpl(
 		onConnectionStateChange = { androidDevice, isConnected ->
 			// When we try to connect to a paired device, this callback executes with isConnected to true and after some small time (around 4s)
 			// it executes again with isConnected to false
-			println("$$$ BluetoothControllerImpl.onConnectionStateChange() androidDevice(name=${androidDevice.name}, address=${androidDevice.address}), isConnected=$isConnected")
 
 			if (!isConnected) {
 				_devices.update { devices ->
@@ -153,7 +152,6 @@ class BluetoothControllerImpl(
 
 	private val _bondStateChangeReceiver = DeviceBondStateChangeBroadcastReceiver(
 		onStateChange = { androidDevice, state ->
-			println("$$$ BluetoothControllerImpl.onBondStateChange() device(name=${androidDevice.name}, address=${androidDevice.address}), state=$state")
 			_devices.update { devices ->
 				devices.map { existingDevice ->
 					if (existingDevice.address == androidDevice.address) {
@@ -172,25 +170,25 @@ class BluetoothControllerImpl(
 	private var _serverSocket: BluetoothServerSocket? = null
 
 
-	override fun startScan() {
+	override fun startScan(): Boolean {
 		if (!canEnableBluetooth) {
-			return
+			return false
 		}
 
-		val adapter = _bluetoothAdapter ?: return
+		val adapter = _bluetoothAdapter ?: return false
 
 		updateDevices()
 
-		adapter.startDiscovery()
+		return adapter.startDiscovery()
 	}
 
-	override fun stopScan() {
+	override fun stopScan(): Boolean {
 		if (!canEnableBluetooth) {
-			return
+			return false
 		}
-		val adapter = _bluetoothAdapter ?: return
+		val adapter = _bluetoothAdapter ?: return false
 
-		adapter.cancelDiscovery()
+		return adapter.cancelDiscovery()
 	}
 
 	override suspend fun startBluetoothServer(): BluetoothController.ConnectionResult {
@@ -263,8 +261,6 @@ class BluetoothControllerImpl(
 		}
 
 		val androidDevice = adapter.getRemoteDevice(address)
-
-		println("$$$ connectToDevice androidDevice = $androidDevice")
 
 		val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
 		_clientSocketByAddress[address] = clientSocket
@@ -440,9 +436,7 @@ class BluetoothControllerImpl(
 		val adapter = _bluetoothAdapter ?: return
 
 		_devices.update { devices ->
-			val pairedAndroidDevices = adapter.bondedDevices.also {
-				println("$$$ pairedAndroidDevices = $it")
-			}
+			val pairedAndroidDevices = adapter.bondedDevices
 
 			buildList {
 				devices.forEach { device ->
@@ -517,8 +511,6 @@ class BluetoothControllerImpl(
 			return false
 		}
 
-		println("$$$ sendString($string)")
-
 		return withContext(Dispatchers.IO) {
 			try {
 				outputStream.write(string.toByteArray())
@@ -553,7 +545,6 @@ class BluetoothControllerImpl(
 	override fun onServiceRegistered() {
 		registeredScope.launch {
 			_bluetoothState.collect { state ->
-				println("$$$ BluetoothControllerImpl.onServiceRegistered() Bluetooth state changed to $state")
 				if (state == BluetoothController.BluetoothState.On) {
 					updateDevices()
 				}
@@ -577,7 +568,6 @@ class BluetoothControllerImpl(
 		context.registerReceiver(
 			_bluetoothDeviceConnectionReceiver,
 			IntentFilter().apply {
-				addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED) // I'm not sure this is needed
 				addAction(AndroidBluetoothDevice.ACTION_ACL_CONNECTED)
 				addAction(AndroidBluetoothDevice.ACTION_ACL_DISCONNECTED)
 			},
