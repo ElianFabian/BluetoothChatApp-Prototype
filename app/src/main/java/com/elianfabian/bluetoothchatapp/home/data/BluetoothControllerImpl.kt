@@ -219,6 +219,9 @@ class BluetoothControllerImpl(
 
 		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
 
+		_serverSocket?.close()
+		_serverSocket = null
+
 		_isWaitingForConnection.value = true
 		val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
 			SdpRecordName,
