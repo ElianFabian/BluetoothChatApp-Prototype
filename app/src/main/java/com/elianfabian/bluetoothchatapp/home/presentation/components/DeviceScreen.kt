@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -129,9 +130,10 @@ fun DeviceScreen(
 				state = state,
 				onAction = onAction,
 				modifier = Modifier
-					.fillMaxWidth()
+					.fillMaxSize()
 					.weight(1F)
 					.padding(horizontal = 16.dp)
+					.padding(bottom = 10.dp)
 //					.height(500.dp)
 			)
 			Column(
@@ -295,7 +297,7 @@ private fun BluetoothDeviceList(
 				Row(
 					horizontalArrangement = Arrangement.Center,
 					verticalAlignment = Alignment.CenterVertically,
-					modifier = modifier
+					modifier = modifier.fillParentMaxSize(fraction = 0.6F)
 				) {
 					Text(
 						text = "Bluetooth is off.",
@@ -390,7 +392,6 @@ private fun BluetoothDeviceList(
 				item {
 					Text(
 						text = "No messages",
-						modifier = Modifier.padding(bottom = 8.dp)
 					)
 				}
 			}
