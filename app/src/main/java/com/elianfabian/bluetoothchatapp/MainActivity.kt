@@ -1,11 +1,14 @@
 package com.elianfabian.bluetoothchatapp
 
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.Window
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
@@ -49,6 +53,11 @@ class MainActivity : FragmentActivity() {
 		super.onCreate(savedInstanceState)
 
 		enableEdgeToEdge()
+
+		// On some devices (at least on POCO F5 Pro API 35) the navbar is not completely transparent, this way we can force it
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+			window.isNavigationBarContrastEnforced = false
+		}
 
 		setContent {
 			BluetoothChatAppTheme {
@@ -102,8 +111,12 @@ class MainActivity : FragmentActivity() {
 	override fun onDestroy() {
 		super.onDestroy()
 
-		backstack.forEachServiceOfType<MainActivityCallbacks> { service ->
-			service.onDestroyMainActivity(this)
+		try {
+			backstack.forEachServiceOfType<MainActivityCallbacks> { service ->
+				service.onDestroyMainActivity(this)
+			}
+		} catch (t: Throwable) {
+			t.printStackTrace()
 		}
 	}
 

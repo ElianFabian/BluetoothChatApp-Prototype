@@ -11,7 +11,10 @@ import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.skip
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,7 +37,7 @@ class HomeViewModel(
 		bluetoothController.state,
 		bluetoothPermissionController.state,
 		_permissionDialog,
-		androidHelper.bluetoothName,
+		bluetoothController.bluetoothDeviceName,
 		_messages,
 		_enteredMessage,
 		_targetDeviceAddress,
@@ -65,7 +68,6 @@ class HomeViewModel(
 		scope = registeredScope,
 		started = SharingStarted.WhileSubscribed(5000),
 		initialValue = HomeState(
-			bluetoothDeviceName = androidHelper.bluetoothName.value,
 			isBluetoothSupported = bluetoothController.isBluetoothSupported,
 			isBluetoothOn = bluetoothController.state.value.isOn,
 			permissionState = bluetoothPermissionController.state.value.values.toList(),
@@ -202,12 +204,17 @@ class HomeViewModel(
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
 					registeredScope.launch {
 						if (bluetoothController.disconnectFromDevice(action.device.address)) {
-							androidHelper.showToast("Disconnected from: ${action.device.name}")
+//							androidHelper.showToast("Disconnected from: ${action.device.name}")
 						}
 						else {
 							androidHelper.showToast("Could not disconnect from: ${action.device.name}")
 						}
 					}
+				}
+			}
+			is HomeAction.ClickMessage -> {
+				if (!action.message.isFromLocalUser) {
+					_targetDeviceAddress.value = action.message.senderAddress
 				}
 			}
 		}
@@ -260,6 +267,25 @@ class HomeViewModel(
 					if (device.connectionState == BluetoothDevice.ConnectionState.Disconnected && device.address == _targetDeviceAddress.value) {
 						_targetDeviceAddress.value = null
 					}
+				}
+			}
+		}
+
+		registeredScope.launch {
+			val previousStates = mutableMapOf<String, BluetoothDevice.ConnectionState>()
+
+			bluetoothController.devices.collect { devices ->
+				devices.forEach { device ->
+					val previousState = previousStates[device.address] // Usa una ID única del dispositivo
+					val currentState = device.connectionState
+
+					if ((previousState == BluetoothDevice.ConnectionState.Connected || previousState == BluetoothDevice.ConnectionState.Disconnecting) &&
+						currentState == BluetoothDevice.ConnectionState.Disconnected
+					) {
+						androidHelper.showToast("Device '${device.name}' disconnected")
+					}
+
+					previousStates[device.address] = currentState
 				}
 			}
 		}

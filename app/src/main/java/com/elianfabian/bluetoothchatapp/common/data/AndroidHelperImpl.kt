@@ -53,13 +53,6 @@ class AndroidHelperImpl(
 
 	private val activity: FragmentActivity get() = mainActivityHolder.mainActivity
 
-	override val bluetoothName by settingFlow(
-		context = context,
-		key = "bluetooth_name",
-		scope = applicationScope,
-		type = SettingFlowDelegate.Type.Secure,
-	)
-
 	override fun showToast(message: String) {
 		Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
 	}
@@ -233,6 +226,8 @@ class AndroidHelperImpl(
 }
 
 
+// Some keys throws the following exception when the app is installed from an apk (not from the editor):
+// java.lang.SecurityException: Settings key: <bluetooth_name> is only readable to apps with targetSdkVersion lower than or equal to: 31
 private class SettingFlowDelegate(
 	private val context: Context,
 	private val key: String,

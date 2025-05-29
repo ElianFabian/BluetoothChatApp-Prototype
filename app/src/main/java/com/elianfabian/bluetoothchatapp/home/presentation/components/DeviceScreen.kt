@@ -1,36 +1,30 @@
 package com.elianfabian.bluetoothchatapp.home.presentation.components
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Button
@@ -47,9 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.modifier.modifierLocalProvider
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -133,7 +124,6 @@ fun DeviceScreen(
 					.fillMaxSize()
 					.weight(1F)
 					.padding(horizontal = 16.dp)
-					.padding(bottom = 10.dp)
 //					.height(500.dp)
 			)
 			Column(
@@ -141,7 +131,7 @@ fun DeviceScreen(
 					.clip(RoundedCornerShape(8.dp))
 					.background(MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(8.dp))
 					.padding(horizontal = 8.dp)
-					.padding(top = 8.dp)
+					.padding(top = 8.dp, bottom = 3.dp)
 			) {
 				Text(text = "Target device address: ${state.targetDeviceAddress ?: "None"}")
 				Spacer(Modifier.height(8.dp))
@@ -261,11 +251,18 @@ private fun BluetoothDeviceList(
 	LazyColumn(
 		state = lazyListState,
 		verticalArrangement = Arrangement.spacedBy(3.dp),
+		contentPadding = PaddingValues(bottom = 15.dp),
 		modifier = modifier
 	) {
 		item {
 			Column {
-				Text("Your device name: '${state.bluetoothDeviceName}'")
+				if (state.bluetoothDeviceName != null) {
+					Text(
+						text = "Your device name: '${state.bluetoothDeviceName}'",
+						fontSize = 18.sp,
+					)
+				}
+				Spacer(Modifier.height(8.dp))
 				Button(
 					onClick = {
 						onAction(HomeAction.MakeDeviceDiscoverable)
@@ -402,6 +399,9 @@ private fun BluetoothDeviceList(
 						isFromLocalUser = message.isFromLocalUser,
 						content = message.content,
 						senderAddress = message.senderAddress,
+						onClick = {
+							onAction(HomeAction.ClickMessage(message))
+						},
 					)
 				}
 			}
@@ -422,7 +422,22 @@ private fun BluetoothDeviceItem(
 	Row(
 		modifier = modifier
 			.clip(RoundedCornerShape(8.dp))
-			.background(MaterialTheme.colorScheme.surfaceVariant)
+//			.background(
+//				when (connectionState) {
+//					BluetoothDevice.ConnectionState.Connected -> Color.Green
+//					BluetoothDevice.ConnectionState.Connecting -> Color.Yellow
+//					BluetoothDevice.ConnectionState.Disconnected -> Color.LightGray
+//					BluetoothDevice.ConnectionState.Disconnecting -> Color.Red
+//				}
+//			)
+			.background(
+				when (connectionState) {
+					BluetoothDevice.ConnectionState.Connected -> Color(0xFFA5D6A7)
+					BluetoothDevice.ConnectionState.Connecting -> Color(0xFFFFF59D)
+					BluetoothDevice.ConnectionState.Disconnected -> MaterialTheme.colorScheme.surfaceVariant
+					BluetoothDevice.ConnectionState.Disconnecting -> Color(0xFFEF9A9A)
+				}
+			)
 			.padding(12.dp)
 			.combinedClickable(
 				onClick = {
@@ -449,17 +464,13 @@ private fun BluetoothDeviceItem(
 				)
 				Spacer(modifier = Modifier.height(4.dp))
 			}
-			Text(
-				text = address,
-				fontSize = 18.sp,
-				lineHeight = 30.sp,
-				color = when (connectionState) {
-					BluetoothDevice.ConnectionState.Connected -> Color.Green
-					BluetoothDevice.ConnectionState.Connecting -> Color.Yellow
-					BluetoothDevice.ConnectionState.Disconnected -> Color.LightGray
-					BluetoothDevice.ConnectionState.Disconnecting -> Color.Red
-				},
-			)
+			Row {
+				Text(
+					text = address,
+					fontSize = 18.sp,
+					lineHeight = 30.sp,
+				)
+			}
 		}
 	}
 }
@@ -470,6 +481,7 @@ private fun Message(
 	senderAddress: String,
 	isFromLocalUser: Boolean,
 	content: String,
+	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val backgroundColor = if (isFromLocalUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
@@ -479,6 +491,9 @@ private fun Message(
 		horizontalArrangement = if (isFromLocalUser) Arrangement.End else Arrangement.Start,
 		modifier = modifier
 			.fillMaxWidth()
+			.clickable {
+				onClick()
+			}
 	) {
 		Column(
 			modifier = Modifier

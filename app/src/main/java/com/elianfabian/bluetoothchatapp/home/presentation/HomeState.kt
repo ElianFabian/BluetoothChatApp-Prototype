@@ -5,9 +5,9 @@ import com.elianfabian.bluetoothchatapp.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
 
 data class HomeState(
-	val bluetoothDeviceName: String,
 	val isBluetoothSupported: Boolean,
 	val isBluetoothOn: Boolean,
+	val bluetoothDeviceName: String? = null,
 	val isWaitingForConnection: Boolean = false,
 	val isScanning: Boolean = false,
 	val pairedDevices: List<BluetoothDevice> = emptyList(),

@@ -4,8 +4,6 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface AndroidHelper {
 
-	val bluetoothName: StateFlow<String>
-
 	fun showToast(message: String)
 
 	fun openAppSettings()

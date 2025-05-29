@@ -1,5 +1,6 @@
 package com.elianfabian.bluetoothchatapp.home.presentation
 
+import com.elianfabian.bluetoothchatapp.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp.home.domain.BluetoothDevice
 
 sealed interface HomeAction {
@@ -15,4 +16,5 @@ sealed interface HomeAction {
 	data class ClickScannedDevice(val device: BluetoothDevice) : HomeAction
 	data class ClickPairedDevice(val device: BluetoothDevice) : HomeAction
 	data class LongClickPairedDevice(val device: BluetoothDevice) : HomeAction
+	data class ClickMessage(val message: BluetoothMessage) : HomeAction
 }
