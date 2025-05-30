@@ -125,6 +125,7 @@ class BluetoothControllerImpl(
 
 	private val _bluetoothStateChangeReceiver = BluetoothStateChangeBroadcastReceiver(
 		onStateChange = { state ->
+			println("$$$ state = $state")
 			when (state) {
 				BluetoothAdapter.STATE_ON -> {
 					_bluetoothState.value = BluetoothController.BluetoothState.On
@@ -241,12 +242,14 @@ class BluetoothControllerImpl(
 
 		stopScan()
 
-		_clientSocketByAddress[clientSocket.remoteDevice.address] = clientSocket
+		val connectedDeviceAddress = clientSocket.remoteDevice.address
+
+		_clientSocketByAddress[connectedDeviceAddress] = clientSocket
 		_isWaitingForConnection.value = false
 
 		_devices.update { devices ->
 			devices.map { device ->
-				if (device.address == clientSocket.remoteDevice.address) {
+				if (device.address == connectedDeviceAddress) {
 					device.copy(connectionState = BluetoothDevice.ConnectionState.Connected)
 				}
 				else device
@@ -255,7 +258,7 @@ class BluetoothControllerImpl(
 
 		updateDevices()
 
-		val connectedDevice = _devices.value.find { it.address == clientSocket.remoteDevice.address }
+		val connectedDevice = _devices.value.find { it.address == connectedDeviceAddress }
 			?: throw IllegalStateException("Connected device not found in the list of devices")
 
 		return BluetoothController.ConnectionResult.ConnectionEstablished(connectedDevice)
@@ -446,6 +449,7 @@ class BluetoothControllerImpl(
 
 		val clientSocket = _clientSocketByAddress[address]
 			?: throw IllegalStateException("Can't send message if there's no client socket for address: $address")
+
 		if (clientSocket.sendString(message)) {
 			return BluetoothMessage(
 				senderName = null,
@@ -581,6 +585,21 @@ class BluetoothControllerImpl(
 			_bluetoothState.collect { state ->
 				if (state == BluetoothController.BluetoothState.On) {
 					updateDevices()
+				}
+				else if (state == BluetoothController.BluetoothState.Off) {
+					_serverSocket?.close()
+					_serverSocket = null
+
+					_clientSocketByAddress.forEach { (_, socket) ->
+						socket.close()
+					}
+					_clientSocketByAddress.clear()
+
+					_devices.update { devices ->
+						devices.map { device ->
+							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+						}
+					}
 				}
 			}
 		}
