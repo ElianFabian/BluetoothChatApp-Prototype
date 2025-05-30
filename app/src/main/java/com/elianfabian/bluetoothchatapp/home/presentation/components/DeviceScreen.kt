@@ -280,6 +280,13 @@ private fun BluetoothDeviceList(
 								)
 							}
 						}
+						Spacer(Modifier.height(6.dp))
+						Text(
+							text = "Go to settings the name was effectively changed, in some devices this doesn't work, so you'll have to change it in bluetooth settings.",
+							fontSize = 13.sp,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							lineHeight = 16.sp,
+						)
 					}
 					else {
 						Row(
@@ -613,12 +620,12 @@ private fun Preview() = BasePreview {
 				"Hey",
 				"Hello",
 				"How are you?",
-				"Good",
-				"How about you?",
-				"Fine, thanks",
-				"See you later",
-				"Bye",
-				"Take care",
+//				"Good",
+//				"How about you?",
+//				"Fine, thanks",
+//				"See you later",
+//				"Bye",
+//				"Take care",
 //				"See you soon",
 //				"Have a nice day",
 //				"Goodbye",

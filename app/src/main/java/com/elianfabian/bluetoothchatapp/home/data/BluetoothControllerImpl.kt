@@ -198,6 +198,11 @@ class BluetoothControllerImpl(
 		}
 		val adapter = _bluetoothAdapter ?: return false
 
+		// In some devices (at least on Realme 6 API 30), when you change the name and go to bluetooth settings
+		// the previous name is automatically set
+		// Notes:
+		// - Bluetooth must be enabled to change the name
+		// - Immediately calling BluetoothAdapter.getName() after calling BluetoothAdapter.setName(...) won't return the new name
 		return adapter.setName(name)
 	}
 
@@ -584,6 +589,8 @@ class BluetoothControllerImpl(
 
 	override fun onAppEnteredForeground() {
 		updateDevices()
+
+		_bluetoothDeviceName.value = _bluetoothAdapter?.name
 	}
 
 	override fun onAppEnteredBackground() {
