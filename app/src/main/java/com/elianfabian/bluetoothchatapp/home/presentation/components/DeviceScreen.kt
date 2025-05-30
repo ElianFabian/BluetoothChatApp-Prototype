@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -124,7 +126,6 @@ fun DeviceScreen(
 					.fillMaxSize()
 					.weight(1F)
 					.padding(horizontal = 16.dp)
-//					.height(500.dp)
 			)
 			Column(
 				modifier = Modifier
@@ -257,10 +258,52 @@ private fun BluetoothDeviceList(
 		item {
 			Column {
 				if (state.bluetoothDeviceName != null) {
-					Text(
-						text = "Your device name: '${state.bluetoothDeviceName}'",
-						fontSize = 18.sp,
-					)
+					if (state.enteredBluetoothDeviceName != null) {
+						Row(
+							verticalAlignment = Alignment.CenterVertically,
+						) {
+							TextField(
+								value = state.enteredBluetoothDeviceName,
+								onValueChange = { value ->
+									onAction(HomeAction.EnterBluetoothDeviceName(value))
+								},
+							)
+							Spacer(Modifier.width(6.dp))
+							IconButton(
+								onClick = {
+									onAction(HomeAction.SaveBluetoothDeviceName)
+								},
+							) {
+								Icon(
+									imageVector = Icons.Filled.CheckCircle,
+									contentDescription = null,
+								)
+							}
+						}
+					}
+					else {
+						Row(
+							verticalAlignment = Alignment.CenterVertically,
+						) {
+							Text(
+								text = "Your device name: '${state.bluetoothDeviceName}'",
+								fontSize = 18.sp,
+							)
+							if (state.isBluetoothOn) {
+								Spacer(Modifier.width(4.dp))
+								IconButton(
+									onClick = {
+										onAction(HomeAction.EditBluetoothDeviceName)
+									},
+								) {
+									Icon(
+										imageVector = Icons.Default.Edit,
+										contentDescription = null,
+									)
+								}
+							}
+						}
+					}
 				}
 				Spacer(Modifier.height(8.dp))
 				Button(
@@ -525,9 +568,9 @@ private fun Message(
 
 @Preview(
 	showBackground = true,
-	widthDp = 392,
-	heightDp = 785,
-	fontScale = 1.4F,
+//	widthDp = 392,
+//	heightDp = 785,
+//	fontScale = 1.4F,
 )
 @Composable
 private fun Preview() = BasePreview {

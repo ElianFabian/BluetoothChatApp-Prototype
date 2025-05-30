@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.skip
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +33,7 @@ class HomeViewModel(
 	private val _messages = MutableStateFlow<List<BluetoothMessage>>(emptyList())
 	private val _enteredMessage = MutableStateFlow("")
 	private val _targetDeviceAddress = MutableStateFlow<String?>(null)
+	private val _enteredBluetoothDeviceName = MutableStateFlow<String?>(null)
 
 	val state = combineTuple(
 		bluetoothController.devices,
@@ -42,7 +46,13 @@ class HomeViewModel(
 		_enteredMessage,
 		_targetDeviceAddress,
 		bluetoothController.isWaitingForConnection,
-	).map { (devices, isScanning, bluetoothState, state, permissionDialog, bluetoothName, messages, enteredMessage, targetDeviceAddress, isWaitingForConnection) ->
+		_enteredBluetoothDeviceName,
+	).map {
+			(
+				devices, isScanning, bluetoothState, state, permissionDialog, bluetoothName,
+				messages, enteredMessage, targetDeviceAddress, isWaitingForConnection, enteredBluetoothDeviceName,
+			),
+		->
 		HomeState(
 			pairedDevices = devices.filter {
 				it.pairingState == BluetoothDevice.PairingState.Paired
@@ -63,6 +73,7 @@ class HomeViewModel(
 			enteredMessage = enteredMessage,
 			targetDeviceAddress = targetDeviceAddress,
 			isWaitingForConnection = isWaitingForConnection,
+			enteredBluetoothDeviceName = enteredBluetoothDeviceName,
 		)
 	}.stateIn(
 		scope = registeredScope,
@@ -98,8 +109,7 @@ class HomeViewModel(
 			is HomeAction.StartServer -> {
 				registeredScope.launch {
 					executeIfBluetoothRequirementsAreSatisfied {
-						val result = bluetoothController.startBluetoothServer()
-						when (result) {
+						when (val result = bluetoothController.startBluetoothServer()) {
 							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 								_targetDeviceAddress.value = result.device.address
 								bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
@@ -171,8 +181,7 @@ class HomeViewModel(
 					return
 				}
 				registeredScope.launch {
-					val result = bluetoothController.connectToDevice(action.device.address)
-					when (result) {
+					when (val result = bluetoothController.connectToDevice(action.device.address)) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							_targetDeviceAddress.value = result.device.address
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
@@ -187,8 +196,7 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickScannedDevice -> {
 				registeredScope.launch {
-					val result = bluetoothController.connectToDevice(action.device.address)
-					when (result) {
+					when (val result = bluetoothController.connectToDevice(action.device.address)) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
@@ -215,6 +223,22 @@ class HomeViewModel(
 			is HomeAction.ClickMessage -> {
 				if (!action.message.isFromLocalUser) {
 					_targetDeviceAddress.value = action.message.senderAddress
+				}
+			}
+			is HomeAction.EditBluetoothDeviceName -> {
+				_enteredBluetoothDeviceName.value = bluetoothController.bluetoothDeviceName.value
+			}
+			is HomeAction.EnterBluetoothDeviceName -> {
+				_enteredBluetoothDeviceName.value = action.bluetoothDeviceName
+			}
+			is HomeAction.SaveBluetoothDeviceName -> {
+				val newBluetoothDeviceName = _enteredBluetoothDeviceName.value ?: return
+
+				if (bluetoothController.setBluetoothDeviceName(newBluetoothDeviceName)) {
+					_enteredBluetoothDeviceName.value = null
+				}
+				else {
+					androidHelper.showToast("Couldn't change the bluetooth name")
 				}
 			}
 		}
@@ -270,13 +294,12 @@ class HomeViewModel(
 				}
 			}
 		}
-
 		registeredScope.launch {
 			val previousStates = mutableMapOf<String, BluetoothDevice.ConnectionState>()
 
 			bluetoothController.devices.collect { devices ->
 				devices.forEach { device ->
-					val previousState = previousStates[device.address] // Usa una ID única del dispositivo
+					val previousState = previousStates[device.address]
 					val currentState = device.connectionState
 
 					if ((previousState == BluetoothDevice.ConnectionState.Connected || previousState == BluetoothDevice.ConnectionState.Disconnecting) &&
@@ -286,6 +309,13 @@ class HomeViewModel(
 					}
 
 					previousStates[device.address] = currentState
+				}
+			}
+		}
+		registeredScope.launch {
+			bluetoothController.state.collect { state ->
+				if (state == BluetoothController.BluetoothState.Off) {
+					_enteredBluetoothDeviceName.value = null
 				}
 			}
 		}

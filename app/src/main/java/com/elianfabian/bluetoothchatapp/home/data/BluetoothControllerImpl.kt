@@ -183,9 +183,23 @@ class BluetoothControllerImpl(
 		}
 	)
 
+	private val _bluetoothDeviceNameChangeReceiver = BluetoothDeviceNameChangeBroadcastReceiver(
+		onNameChange = { newName ->
+			_bluetoothDeviceName.value = newName
+		}
+	)
+
 	private val _clientSocketByAddress: MutableMap<String, BluetoothSocket> = ConcurrentHashMap()
 	private var _serverSocket: BluetoothServerSocket? = null
 
+	override fun setBluetoothDeviceName(name: String): Boolean {
+		if (!canEnableBluetooth) {
+			return false
+		}
+		val adapter = _bluetoothAdapter ?: return false
+
+		return adapter.setName(name)
+	}
 
 	override fun startScan(): Boolean {
 		if (!canEnableBluetooth) {
@@ -570,10 +584,6 @@ class BluetoothControllerImpl(
 
 	override fun onAppEnteredForeground() {
 		updateDevices()
-
-		if (canEnableBluetooth) {
-			_bluetoothDeviceName.value = _bluetoothAdapter?.name
-		}
 	}
 
 	override fun onAppEnteredBackground() {
@@ -603,6 +613,10 @@ class BluetoothControllerImpl(
 				}
 			}
 		}
+		context.registerReceiver(
+			_bluetoothDeviceNameChangeReceiver,
+			IntentFilter(BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED),
+		)
 		context.registerReceiver(
 			_deviceFoundReceiver,
 			IntentFilter(AndroidBluetoothDevice.ACTION_FOUND),
@@ -636,6 +650,7 @@ class BluetoothControllerImpl(
 
 		println("$$$ BluetoothControllerImpl.onServiceUnregistered()")
 		adapter.cancelDiscovery()
+		context.unregisterReceiver(_bluetoothDeviceNameChangeReceiver)
 		context.unregisterReceiver(_deviceFoundReceiver)
 		context.unregisterReceiver(_discoveryStateChangeReceiver)
 		context.unregisterReceiver(_bluetoothStateChangeReceiver)

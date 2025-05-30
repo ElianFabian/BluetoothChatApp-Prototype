@@ -17,6 +17,8 @@ interface BluetoothController {
 
 	val devices: StateFlow<List<BluetoothDevice>>
 
+	fun setBluetoothDeviceName(name: String): Boolean
+
 	fun startScan(): Boolean
 	fun stopScan(): Boolean
 
