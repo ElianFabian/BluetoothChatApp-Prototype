@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-	namespace = "com.elianfabian.bluetoothchatapp"
+	namespace = "com.elianfabian.bluetoothchatapp_prototype"
 	compileSdk = 35
 
 	defaultConfig {
-		applicationId = "com.elianfabian.bluetoothchatapp"
+		applicationId = "com.elianfabian.bluetoothchatapp_prototype"
 		minSdk = 24
 		targetSdk = 35
 		versionCode = 1

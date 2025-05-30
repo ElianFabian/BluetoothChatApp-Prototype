@@ -20,5 +20,5 @@ dependencyResolutionManagement {
 	}
 }
 
-rootProject.name = "BluetoothChatApp"
+rootProject.name = "BluetoothChatApp-Prototype"
 include(":app")
