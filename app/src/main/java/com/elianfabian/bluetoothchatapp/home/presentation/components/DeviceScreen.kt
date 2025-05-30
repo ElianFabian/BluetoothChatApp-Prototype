@@ -267,6 +267,7 @@ private fun BluetoothDeviceList(
 								onValueChange = { value ->
 									onAction(HomeAction.EnterBluetoothDeviceName(value))
 								},
+								modifier = Modifier.weight(1F)
 							)
 							Spacer(Modifier.width(6.dp))
 							IconButton(
@@ -280,9 +281,9 @@ private fun BluetoothDeviceList(
 								)
 							}
 						}
-						Spacer(Modifier.height(6.dp))
+						Spacer(Modifier.height(4.dp))
 						Text(
-							text = "Go to settings the name was effectively changed, in some devices this doesn't work, so you'll have to change it in bluetooth settings.",
+							text = "Go to settings to check the name was effectively changed, in some devices this doesn't work, so you'll have to change it in bluetooth settings.",
 							fontSize = 13.sp,
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 							lineHeight = 16.sp,
@@ -295,6 +296,7 @@ private fun BluetoothDeviceList(
 							Text(
 								text = "Your device name: '${state.bluetoothDeviceName}'",
 								fontSize = 18.sp,
+								modifier = Modifier.weight(1F)
 							)
 							if (state.isBluetoothOn) {
 								Spacer(Modifier.width(4.dp))
