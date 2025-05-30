@@ -12,13 +12,17 @@ import com.zhuinden.simplestackextensions.servicesktx.lookup
 data object HomeModule : CoroutineScopedServiceModule() {
 
 	override fun bindModuleServices(serviceBinder: ServiceBinder) {
-		val bluetoothController: BluetoothController = BluetoothControllerImpl(
-			mainActivityHolder = serviceBinder.lookup(),
-			registeredScope = registeredScope,
-		)
+
 		val bluetoothPermissionController = BluetoothPermissionController(
 			mainActivityHolder = serviceBinder.lookup(),
 		)
+
+		val bluetoothController: BluetoothController = BluetoothControllerImpl(
+			mainActivityHolder = serviceBinder.lookup(),
+			registeredScope = registeredScope,
+			bluetoothPermissionController = bluetoothPermissionController,
+		)
+
 		val viewModel = HomeViewModel(
 			bluetoothController = bluetoothController,
 			bluetoothPermissionController = bluetoothPermissionController,

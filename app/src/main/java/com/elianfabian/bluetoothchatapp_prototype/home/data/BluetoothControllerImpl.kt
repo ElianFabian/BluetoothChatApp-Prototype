@@ -12,9 +12,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp_prototype.common.data.MainActivityHolder
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.MultiplePermissionController
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionController
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
+import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -39,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap
 class BluetoothControllerImpl(
 	private val mainActivityHolder: MainActivityHolder,
 	private val registeredScope: CoroutineScope,
+	private val bluetoothPermissionController: MultiplePermissionController,
 ) : BluetoothController,
 	ScopedServices.Registered,
 	ApplicationBackgroundStateChangeCallback {
@@ -600,10 +606,7 @@ class BluetoothControllerImpl(
 	override fun onServiceRegistered() {
 		registeredScope.launch {
 			_bluetoothState.collect { state ->
-				if (state == BluetoothController.BluetoothState.On) {
-					updateDevices()
-				}
-				else if (state == BluetoothController.BluetoothState.Off) {
+				if (state == BluetoothController.BluetoothState.Off) {
 					_serverSocket?.close()
 					_serverSocket = null
 
@@ -617,6 +620,16 @@ class BluetoothControllerImpl(
 							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
 						}
 					}
+				}
+			}
+		}
+		registeredScope.launch {
+			combineTuple(
+				_bluetoothState,
+				bluetoothPermissionController.state,
+			).collect { (bluetoothState, permissionsState) ->
+				if (bluetoothState.isOn && permissionsState.values.all { it == PermissionState.Granted }) {
+					updateDevices()
 				}
 			}
 		}
