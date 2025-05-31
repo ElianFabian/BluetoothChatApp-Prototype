@@ -681,6 +681,8 @@ class BluetoothControllerImpl(
 			socket.close()
 		}
 		_clientSocketByAddress.clear()
+		_serverSocket?.close()
+		_serverSocket = null
 	}
 
 	companion object {
