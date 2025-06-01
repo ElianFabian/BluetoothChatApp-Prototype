@@ -516,6 +516,9 @@ class BluetoothControllerImpl(
 						add(newDevice)
 					}
 				}
+
+				val notPairedDevices = devices.filter { it.pairingState != BluetoothDevice.PairingState.Paired }
+				addAll(notPairedDevices)
 			}
 		}
 	}
