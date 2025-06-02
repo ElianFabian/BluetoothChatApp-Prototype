@@ -41,7 +41,6 @@ interface BluetoothController {
 
 	sealed interface ConnectionResult {
 		data class ConnectionEstablished(val device: BluetoothDevice) : ConnectionResult
-		data object DeviceIsNotPaired : ConnectionResult
 		data object CouldNotConnect : ConnectionResult
 	}
 }

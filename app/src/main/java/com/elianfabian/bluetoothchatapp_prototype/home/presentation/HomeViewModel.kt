@@ -1,8 +1,9 @@
 package com.elianfabian.bluetoothchatapp_prototype.home.presentation
 
+import android.os.Build
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
-import com.elianfabian.bluetoothchatapp_prototype.common.data.BluetoothPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.MultiplePermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
@@ -18,7 +19,7 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(
 	private val bluetoothController: BluetoothController,
-	private val bluetoothPermissionController: BluetoothPermissionController,
+	private val bluetoothPermissionController: MultiplePermissionController,
 	private val androidHelper: AndroidHelper,
 	private val registeredScope: CoroutineScope,
 ) : ScopedServices.Registered {
@@ -239,12 +240,16 @@ class HomeViewModel(
 	}
 
 	private suspend fun executeIfBluetoothRequirementsAreSatisfied(action: suspend () -> Unit) {
-		bluetoothPermissionController.request()
-		val result = bluetoothPermissionController.awaitResult()
+		val result = bluetoothPermissionController.request()
 		if (result.values.all { it == PermissionState.PermanentlyDenied }) {
+			val feature = if (Build.VERSION.SDK_INT >= 31) {
+				"bluetooth"
+			}
+			else "location"
+
 			_permissionDialog.value = HomeState.PermissionDialogState(
 				title = "Permission Denied",
-				message = "Please, enable Bluetooth permissions in settings.",
+				message = "Please, enable $feature permissions in settings.",
 				actionName = "Settings",
 				onAction = {
 					androidHelper.openAppSettings()
@@ -265,7 +270,7 @@ class HomeViewModel(
 				action()
 			}
 			else {
-				androidHelper.showToast("Please, enable Bluetooth to listen for bluetooth connections.")
+				androidHelper.showToast("Please, enable Bluetooth to perform the operation.")
 			}
 		}
 		else {

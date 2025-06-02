@@ -49,6 +49,88 @@ class BluetoothControllerImpl(
 	ScopedServices.Registered,
 	ApplicationBackgroundStateChangeCallback {
 
+	override fun onServiceRegistered() {
+		registeredScope.launch {
+			_bluetoothState.collect { state ->
+				if (state == BluetoothController.BluetoothState.Off) {
+					_serverSocket?.close()
+					_serverSocket = null
+
+					_clientSocketByAddress.forEach { (_, socket) ->
+						socket.close()
+					}
+					_clientSocketByAddress.clear()
+
+					_devices.update { devices ->
+						devices.map { device ->
+							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+						}
+					}
+				}
+			}
+		}
+		registeredScope.launch {
+			combineTuple(
+				_bluetoothState,
+				bluetoothPermissionController.state,
+			).collect { (bluetoothState, permissionsState) ->
+				if (bluetoothState.isOn && permissionsState.values.all { it == PermissionState.Granted }) {
+					updateDevices()
+				}
+			}
+		}
+		context.registerReceiver(
+			_bluetoothDeviceNameChangeReceiver,
+			IntentFilter(BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED),
+		)
+		context.registerReceiver(
+			_deviceFoundReceiver,
+			IntentFilter(AndroidBluetoothDevice.ACTION_FOUND),
+		)
+		context.registerReceiver(
+			_discoveryStateChangeReceiver,
+			IntentFilter().apply {
+				addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
+				addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+			},
+		)
+		context.registerReceiver(
+			_bluetoothStateChangeReceiver,
+			IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+		)
+		context.registerReceiver(
+			_bluetoothDeviceConnectionReceiver,
+			IntentFilter().apply {
+				addAction(AndroidBluetoothDevice.ACTION_ACL_CONNECTED)
+				addAction(AndroidBluetoothDevice.ACTION_ACL_DISCONNECTED)
+			},
+		)
+		context.registerReceiver(
+			_bondStateChangeReceiver,
+			IntentFilter(AndroidBluetoothDevice.ACTION_BOND_STATE_CHANGED),
+		)
+	}
+
+	override fun onServiceUnregistered() {
+		val adapter = _bluetoothAdapter ?: return
+
+		println("$$$ BluetoothControllerImpl.onServiceUnregistered()")
+		adapter.cancelDiscovery()
+		context.unregisterReceiver(_bluetoothDeviceNameChangeReceiver)
+		context.unregisterReceiver(_deviceFoundReceiver)
+		context.unregisterReceiver(_discoveryStateChangeReceiver)
+		context.unregisterReceiver(_bluetoothStateChangeReceiver)
+		context.unregisterReceiver(_bluetoothDeviceConnectionReceiver)
+		context.unregisterReceiver(_bondStateChangeReceiver)
+
+		_clientSocketByAddress.forEach { (_, socket) ->
+			socket.close()
+		}
+		_clientSocketByAddress.clear()
+		_serverSocket?.close()
+		_serverSocket = null
+	}
+
 	private val context: Context get() = mainActivityHolder.mainActivity
 
 	private val _bluetoothManager = context.getSystemService(BluetoothManager::class.java) ?: throw IllegalStateException("Couldn't get the BluetoothManager")
@@ -223,7 +305,7 @@ class BluetoothControllerImpl(
 	}
 
 	override fun stopScan(): Boolean {
-		if (!canEnableBluetooth) {
+		if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
 			return false
 		}
 		val adapter = _bluetoothAdapter ?: return false
@@ -604,88 +686,6 @@ class BluetoothControllerImpl(
 
 	override fun onAppEnteredBackground() {
 		// no-op
-	}
-
-	override fun onServiceRegistered() {
-		registeredScope.launch {
-			_bluetoothState.collect { state ->
-				if (state == BluetoothController.BluetoothState.Off) {
-					_serverSocket?.close()
-					_serverSocket = null
-
-					_clientSocketByAddress.forEach { (_, socket) ->
-						socket.close()
-					}
-					_clientSocketByAddress.clear()
-
-					_devices.update { devices ->
-						devices.map { device ->
-							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
-						}
-					}
-				}
-			}
-		}
-		registeredScope.launch {
-			combineTuple(
-				_bluetoothState,
-				bluetoothPermissionController.state,
-			).collect { (bluetoothState, permissionsState) ->
-				if (bluetoothState.isOn && permissionsState.values.all { it == PermissionState.Granted }) {
-					updateDevices()
-				}
-			}
-		}
-		context.registerReceiver(
-			_bluetoothDeviceNameChangeReceiver,
-			IntentFilter(BluetoothAdapter.ACTION_LOCAL_NAME_CHANGED),
-		)
-		context.registerReceiver(
-			_deviceFoundReceiver,
-			IntentFilter(AndroidBluetoothDevice.ACTION_FOUND),
-		)
-		context.registerReceiver(
-			_discoveryStateChangeReceiver,
-			IntentFilter().apply {
-				addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
-				addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-			},
-		)
-		context.registerReceiver(
-			_bluetoothStateChangeReceiver,
-			IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
-		)
-		context.registerReceiver(
-			_bluetoothDeviceConnectionReceiver,
-			IntentFilter().apply {
-				addAction(AndroidBluetoothDevice.ACTION_ACL_CONNECTED)
-				addAction(AndroidBluetoothDevice.ACTION_ACL_DISCONNECTED)
-			},
-		)
-		context.registerReceiver(
-			_bondStateChangeReceiver,
-			IntentFilter(AndroidBluetoothDevice.ACTION_BOND_STATE_CHANGED),
-		)
-	}
-
-	override fun onServiceUnregistered() {
-		val adapter = _bluetoothAdapter ?: return
-
-		println("$$$ BluetoothControllerImpl.onServiceUnregistered()")
-		adapter.cancelDiscovery()
-		context.unregisterReceiver(_bluetoothDeviceNameChangeReceiver)
-		context.unregisterReceiver(_deviceFoundReceiver)
-		context.unregisterReceiver(_discoveryStateChangeReceiver)
-		context.unregisterReceiver(_bluetoothStateChangeReceiver)
-		context.unregisterReceiver(_bluetoothDeviceConnectionReceiver)
-		context.unregisterReceiver(_bondStateChangeReceiver)
-
-		_clientSocketByAddress.forEach { (_, socket) ->
-			socket.close()
-		}
-		_clientSocketByAddress.clear()
-		_serverSocket?.close()
-		_serverSocket = null
 	}
 
 	companion object {

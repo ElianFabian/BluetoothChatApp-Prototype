@@ -17,7 +17,10 @@ import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.UUID
@@ -31,7 +34,48 @@ abstract class BasePermissionControllerImpl(
 
 	abstract val permissionName: String
 
-	private val _state by lazy { MutableStateFlow(getCurrentState()) }
+	private val _state by lazy {
+		object : MutableStateFlow<PermissionState> {
+
+			private val _state = MutableStateFlow(getCurrentState())
+			override var value: PermissionState
+				get() {
+					val newValue = getCurrentState()
+					_state.value = newValue
+					return newValue
+				}
+				set(value) {
+					_state.value = value
+				}
+
+			override fun compareAndSet(expect: PermissionState, update: PermissionState): Boolean {
+				return _state.compareAndSet(expect, update)
+			}
+
+			override val replayCache: List<PermissionState>
+				get() = _state.replayCache
+
+			override suspend fun collect(collector: FlowCollector<PermissionState>): Nothing {
+				_state.collect(collector)
+			}
+
+			override val subscriptionCount: StateFlow<Int>
+				get() = _state.subscriptionCount
+
+			override suspend fun emit(value: PermissionState) {
+				_state.emit(value)
+			}
+
+			@ExperimentalCoroutinesApi
+			override fun resetReplayCache() {
+				_state.resetReplayCache()
+			}
+
+			override fun tryEmit(value: PermissionState): Boolean {
+				return _state.tryEmit(value)
+			}
+		}
+	}
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<String> by lazy {
@@ -49,18 +93,16 @@ abstract class BasePermissionControllerImpl(
 
 	private var _resultContinuation: CancellableContinuation<PermissionState>? = null
 
-
-	override fun request() {
-		_launcher.launch(permissionName)
-	}
-
-	override suspend fun awaitResult(): PermissionState {
+	override suspend fun request(): PermissionState {
 		if (getCurrentState() == PermissionState.Granted) {
 			return PermissionState.Granted
 		}
 		check(_resultContinuation == null) {
 			"Already waiting for a result"
 		}
+
+		_launcher.launch(permissionName)
+
 		return suspendCancellableCoroutine { continuation ->
 			_resultContinuation = continuation
 		}
@@ -100,7 +142,48 @@ abstract class BaseMultiplePermissionControllerImpl(
 
 	abstract val permissionNames: List<String>
 
-	private val _state by lazy { MutableStateFlow(getCurrentState()) }
+	private val _state by lazy {
+		object : MutableStateFlow<Map<String, PermissionState>> {
+
+			private val _state = MutableStateFlow(getCurrentState())
+			override var value: Map<String, PermissionState>
+				get() {
+					val newValue = getCurrentState()
+					_state.value = newValue
+					return newValue
+				}
+				set(value) {
+					_state.value = value
+				}
+
+			override fun compareAndSet(expect: Map<String, PermissionState>, update: Map<String, PermissionState>): Boolean {
+				return _state.compareAndSet(expect, update)
+			}
+
+			override val replayCache: List<Map<String, PermissionState>>
+				get() = _state.replayCache
+
+			override suspend fun collect(collector: FlowCollector<Map<String, PermissionState>>): Nothing {
+				_state.collect(collector)
+			}
+
+			override val subscriptionCount: StateFlow<Int>
+				get() = _state.subscriptionCount
+
+			override suspend fun emit(value: Map<String, PermissionState>) {
+				_state.emit(value)
+			}
+
+			@ExperimentalCoroutinesApi
+			override fun resetReplayCache() {
+				_state.resetReplayCache()
+			}
+
+			override fun tryEmit(value: Map<String, PermissionState>): Boolean {
+				return _state.tryEmit(value)
+			}
+		}
+	}
 	override val state = _state.asStateFlow()
 
 	private val _launcher: ActivityResultLauncher<Array<String>> by lazy {
@@ -118,18 +201,16 @@ abstract class BaseMultiplePermissionControllerImpl(
 
 	private var _resultContinuation: CancellableContinuation<Map<String, PermissionState>>? = null
 
-
-	override fun request() {
-		_launcher.launch(permissionNames.toTypedArray())
-	}
-
-	override suspend fun awaitResult(): Map<String, PermissionState> {
+	override suspend fun request(): Map<String, PermissionState> {
 		if (getCurrentState().all { it.value == PermissionState.Granted }) {
 			return getCurrentState()
 		}
 		check(_resultContinuation == null) {
 			"Already waiting for a result"
 		}
+
+		_launcher.launch(permissionNames.toTypedArray())
+
 		return suspendCancellableCoroutine { continuation ->
 			_resultContinuation = continuation
 		}

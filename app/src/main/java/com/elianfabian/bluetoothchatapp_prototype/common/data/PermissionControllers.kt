@@ -33,7 +33,7 @@ class PostNotificationsPermissionController(
 }
 
 
-class BluetoothPermissionController(
+open class BluetoothPermissionController(
 	mainActivityHolder: MainActivityHolder,
 ) : BaseMultiplePermissionControllerImpl(mainActivityHolder) {
 	override val permissionNames: List<String>
