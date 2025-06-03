@@ -293,7 +293,7 @@ class BluetoothControllerImpl(
 	}
 
 	override fun startScan(): Boolean {
-		if (!canEnableBluetooth) {
+		if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= 31) {
 			return false
 		}
 
@@ -305,9 +305,10 @@ class BluetoothControllerImpl(
 	}
 
 	override fun stopScan(): Boolean {
-		if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+		if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED && Build.VERSION.SDK_INT >= 31) {
 			return false
 		}
+
 		val adapter = _bluetoothAdapter ?: return false
 
 		return adapter.cancelDiscovery()
