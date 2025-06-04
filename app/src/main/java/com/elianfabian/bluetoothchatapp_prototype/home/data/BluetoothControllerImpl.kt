@@ -114,7 +114,6 @@ class BluetoothControllerImpl(
 	override fun onServiceUnregistered() {
 		val adapter = _bluetoothAdapter ?: return
 
-		println("$$$ BluetoothControllerImpl.onServiceUnregistered()")
 		adapter.cancelDiscovery()
 		context.unregisterReceiver(_bluetoothDeviceNameChangeReceiver)
 		context.unregisterReceiver(_deviceFoundReceiver)
@@ -211,7 +210,6 @@ class BluetoothControllerImpl(
 
 	private val _bluetoothStateChangeReceiver = BluetoothStateChangeBroadcastReceiver(
 		onStateChange = { state ->
-			println("$$$ state = $state")
 			when (state) {
 				BluetoothAdapter.STATE_ON -> {
 					_bluetoothState.value = BluetoothController.BluetoothState.On
@@ -315,6 +313,15 @@ class BluetoothControllerImpl(
 	}
 
 	override suspend fun startBluetoothServer(): BluetoothController.ConnectionResult {
+		return startBluetoothServerInternal()
+	}
+
+	override suspend fun startInsecureBluetoothServer(): BluetoothController.ConnectionResult {
+		return startBluetoothServerInternal(insecure = true)
+	}
+
+	// Both server and the device who connects have to do it insecurely to avoid the need of linking.
+	private suspend fun startBluetoothServerInternal(insecure: Boolean = false): BluetoothController.ConnectionResult {
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
@@ -322,18 +329,25 @@ class BluetoothControllerImpl(
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
 
-		println("$$$ startBluetoothServer connections: $_clientSocketByAddress")
-
 		val adapter = _bluetoothAdapter ?: throw NullPointerException("Bluetooth adapter is null")
 
 		_serverSocket?.close()
 		_serverSocket = null
 
 		_isWaitingForConnection.value = true
-		val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
-			SdpRecordName,
-			SdpRecordUuid,
-		)
+
+		val serverSocket = if (insecure) {
+			adapter.listenUsingInsecureRfcommWithServiceRecord(
+				SdpRecordName,
+				SdpRecordUuid,
+			)
+		}
+		else {
+			adapter.listenUsingRfcommWithServiceRecord(
+				SdpRecordName,
+				SdpRecordUuid,
+			)
+		}
 		_serverSocket = serverSocket
 
 		val clientSocket = serverSocket.tryAccept()
@@ -346,26 +360,33 @@ class BluetoothControllerImpl(
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
 
+		_isWaitingForConnection.value = false
 		stopScan()
 
-		val connectedDeviceAddress = clientSocket.remoteDevice.address
+		val connectedAndroidDevice = clientSocket.remoteDevice
+		_clientSocketByAddress[connectedAndroidDevice.address] = clientSocket
 
-		_clientSocketByAddress[connectedDeviceAddress] = clientSocket
-		_isWaitingForConnection.value = false
+		val connectedDevice = BluetoothDevice(
+			name = connectedAndroidDevice.name,
+			address = connectedAndroidDevice.address,
+			pairingState = getPairingStateFromAndroidDevice(connectedAndroidDevice),
+			connectionState = BluetoothDevice.ConnectionState.Connected,
+		)
 
 		_devices.update { devices ->
-			devices.map { device ->
-				if (device.address == connectedDeviceAddress) {
-					device.copy(connectionState = BluetoothDevice.ConnectionState.Connected)
+			val isDeviceInList = devices.any { it.address == connectedDevice.address }
+			if (isDeviceInList) {
+				devices.map { device ->
+					if (device.address == connectedDevice.address) {
+						device.copy(connectionState = BluetoothDevice.ConnectionState.Connected)
+					}
+					else device
 				}
-				else device
 			}
+			else devices + connectedDevice
 		}
 
 		updateDevices()
-
-		val connectedDevice = _devices.value.find { it.address == connectedDeviceAddress }
-			?: throw IllegalStateException("Connected device not found in the list of devices")
 
 		return BluetoothController.ConnectionResult.ConnectionEstablished(connectedDevice)
 	}
@@ -376,6 +397,15 @@ class BluetoothControllerImpl(
 	}
 
 	override suspend fun connectToDevice(address: String): BluetoothController.ConnectionResult {
+		return connectToDeviceInternal(address)
+	}
+
+	override suspend fun connectToDeviceInsecure(address: String): BluetoothController.ConnectionResult {
+		return connectToDeviceInternal(address, insecure = true)
+	}
+
+	// Both server and the device who connects have to do it insecurely to avoid the need of linking.
+	private suspend fun connectToDeviceInternal(address: String, insecure: Boolean = false): BluetoothController.ConnectionResult {
 		if (!canEnableBluetooth) {
 			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
 		}
@@ -398,8 +428,13 @@ class BluetoothControllerImpl(
 
 		val androidDevice = adapter.getRemoteDevice(address)
 
-		val clientSocket = androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
-		_clientSocketByAddress[address] = clientSocket
+		val clientSocket = if (insecure) {
+			androidDevice.createInsecureRfcommSocketToServiceRecord(SdpRecordUuid)
+		}
+		else androidDevice.createRfcommSocketToServiceRecord(SdpRecordUuid)
+
+		val connectedAndroidDevice = clientSocket.remoteDevice
+		_clientSocketByAddress[connectedAndroidDevice.address] = clientSocket
 
 		if (clientSocket == null) {
 			return BluetoothController.ConnectionResult.CouldNotConnect
@@ -420,22 +455,27 @@ class BluetoothControllerImpl(
 			return BluetoothController.ConnectionResult.CouldNotConnect
 		}
 
+		val connectedDevice = BluetoothDevice(
+			name = connectedAndroidDevice.name,
+			address = connectedAndroidDevice.address,
+			pairingState = getPairingStateFromAndroidDevice(connectedAndroidDevice),
+			connectionState = BluetoothDevice.ConnectionState.Connected,
+		)
+
 		_devices.update { devices ->
-			devices.map { device ->
-				if (device.address == androidDevice.address) {
-					device.copy(
-						name = androidDevice.name ?: device.name,
-						connectionState = BluetoothDevice.ConnectionState.Connected,
-					)
+			val isDeviceInList = devices.any { it.address == connectedDevice.address }
+			if (isDeviceInList) {
+				devices.map { device ->
+					if (device.address == connectedDevice.address) {
+						device.copy(connectionState = BluetoothDevice.ConnectionState.Connected)
+					}
+					else device
 				}
-				else device
 			}
+			else devices + connectedDevice
 		}
 
 		updateDevices()
-
-		val connectedDevice = _devices.value.find { it.address == androidDevice.address }
-			?: throw IllegalStateException("Connected device not found in the list of devices")
 
 		return BluetoothController.ConnectionResult.ConnectionEstablished(connectedDevice)
 	}

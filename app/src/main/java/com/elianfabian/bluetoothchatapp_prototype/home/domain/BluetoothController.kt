@@ -23,8 +23,10 @@ interface BluetoothController {
 	fun stopScan(): Boolean
 
 	suspend fun startBluetoothServer(): ConnectionResult
+	suspend fun startInsecureBluetoothServer(): ConnectionResult
 	fun stopBluetoothServer()
 	suspend fun connectToDevice(address: String): ConnectionResult
+	suspend fun connectToDeviceInsecure(address: String): ConnectionResult
 	suspend fun disconnectFromDevice(address: String): Boolean
 	fun listenMessagesFrom(address: String): Flow<BluetoothMessage>
 

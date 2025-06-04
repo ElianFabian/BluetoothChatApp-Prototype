@@ -20,4 +20,5 @@ sealed interface HomeAction {
 	data object EditBluetoothDeviceName : HomeAction
 	data object SaveBluetoothDeviceName : HomeAction
 	data class EnterBluetoothDeviceName(val bluetoothDeviceName: String) : HomeAction
+	data class CheckUseSecureConnection(val enabled: Boolean) : HomeAction
 }

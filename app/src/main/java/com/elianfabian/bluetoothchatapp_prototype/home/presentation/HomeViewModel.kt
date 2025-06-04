@@ -29,6 +29,7 @@ class HomeViewModel(
 	private val _enteredMessage = MutableStateFlow("")
 	private val _targetDeviceAddress = MutableStateFlow<String?>(null)
 	private val _enteredBluetoothDeviceName = MutableStateFlow<String?>(null)
+	private val _useSecureConnection = MutableStateFlow(true)
 
 	val state = combineTuple(
 		bluetoothController.devices,
@@ -42,10 +43,12 @@ class HomeViewModel(
 		_targetDeviceAddress,
 		bluetoothController.isWaitingForConnection,
 		_enteredBluetoothDeviceName,
+		_useSecureConnection,
 	).map {
 			(
 				devices, isScanning, bluetoothState, state, permissionDialog, bluetoothName,
 				messages, enteredMessage, targetDeviceAddress, isWaitingForConnection, enteredBluetoothDeviceName,
+				useSecureConnection,
 			),
 		->
 		HomeState(
@@ -56,7 +59,8 @@ class HomeViewModel(
 			},
 			scannedDevices = devices.filter {
 				it.pairingState != BluetoothDevice.PairingState.Paired
-					&& it.connectionState != BluetoothDevice.ConnectionState.Connected
+			}.sortedByDescending {
+				it.connectionState == BluetoothDevice.ConnectionState.Connected
 			},
 			isScanning = isScanning,
 			isBluetoothSupported = bluetoothController.isBluetoothSupported,
@@ -69,6 +73,7 @@ class HomeViewModel(
 			targetDeviceAddress = targetDeviceAddress,
 			isWaitingForConnection = isWaitingForConnection,
 			enteredBluetoothDeviceName = enteredBluetoothDeviceName,
+			useSecureConnection = useSecureConnection,
 		)
 	}.stateIn(
 		scope = registeredScope,
@@ -104,7 +109,11 @@ class HomeViewModel(
 			is HomeAction.StartServer -> {
 				registeredScope.launch {
 					executeIfBluetoothRequirementsAreSatisfied {
-						when (val result = bluetoothController.startBluetoothServer()) {
+						val result = if (_useSecureConnection.value) {
+							bluetoothController.startBluetoothServer()
+						}
+						else bluetoothController.startInsecureBluetoothServer()
+						when (result) {
 							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 								_targetDeviceAddress.value = result.device.address
 								bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
@@ -176,7 +185,11 @@ class HomeViewModel(
 					return
 				}
 				registeredScope.launch {
-					when (val result = bluetoothController.connectToDevice(action.device.address)) {
+					val result = if (_useSecureConnection.value) {
+						bluetoothController.connectToDevice(action.device.address)
+					}
+					else bluetoothController.connectToDeviceInsecure(action.device.address)
+					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							_targetDeviceAddress.value = result.device.address
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
@@ -191,8 +204,14 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickScannedDevice -> {
 				registeredScope.launch {
-					when (val result = bluetoothController.connectToDevice(action.device.address)) {
+					val result = if (_useSecureConnection.value) {
+						bluetoothController.connectToDevice(action.device.address)
+					}
+					else bluetoothController.connectToDeviceInsecure(action.device.address)
+
+					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
+							_targetDeviceAddress.value = result.device.address
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
@@ -235,6 +254,9 @@ class HomeViewModel(
 				else {
 					androidHelper.showToast("Couldn't change the bluetooth name")
 				}
+			}
+			is HomeAction.CheckUseSecureConnection -> {
+				_useSecureConnection.value = action.enabled
 			}
 		}
 	}

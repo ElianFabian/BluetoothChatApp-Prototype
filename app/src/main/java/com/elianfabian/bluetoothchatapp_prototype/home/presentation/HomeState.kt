@@ -18,6 +18,7 @@ data class HomeState(
 	val messages: List<BluetoothMessage> = emptyList(),
 	val enteredMessage: String = "",
 	val targetDeviceAddress: String? = null,
+	val useSecureConnection: Boolean = true,
 ) {
 	data class PermissionDialogState(
 		val title: String,

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -202,31 +203,39 @@ fun DeviceScreen(
 							modifier = Modifier.animateContentSize()
 						)
 					}
-					Button(
-						onClick = {
-							if (state.isWaitingForConnection) {
-								onAction(HomeAction.StopServer)
+					Row {
+						Button(
+							onClick = {
+								if (state.isWaitingForConnection) {
+									onAction(HomeAction.StopServer)
+								}
+								else {
+									onAction(HomeAction.StartServer)
+								}
+							},
+						) {
+							AnimatedVisibility(state.isWaitingForConnection) {
+								Row {
+									CircularProgressIndicator(
+										color = MaterialTheme.colorScheme.onPrimary,
+										strokeWidth = 3.dp,
+										modifier = Modifier.size(20.dp)
+									)
+									Spacer(Modifier.width(8.dp))
+								}
 							}
-							else {
-								onAction(HomeAction.StartServer)
-							}
-						},
-					) {
-						AnimatedVisibility(state.isWaitingForConnection) {
-							Row {
-								CircularProgressIndicator(
-									color = MaterialTheme.colorScheme.onPrimary,
-									strokeWidth = 3.dp,
-									modifier = Modifier.size(20.dp)
-								)
-								Spacer(Modifier.width(8.dp))
-							}
+							Text(
+								text = if (state.isWaitingForConnection) {
+									"Stop server"
+								}
+								else "Start server",
+							)
 						}
-						Text(
-							text = if (state.isWaitingForConnection) {
-								"Stop server"
-							}
-							else "Start server",
+						Checkbox(
+							checked = state.useSecureConnection,
+							onCheckedChange = { checked ->
+								onAction(HomeAction.CheckUseSecureConnection(checked))
+							},
 						)
 					}
 				}
