@@ -18,6 +18,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
 import androidx.core.net.toUri
@@ -97,7 +98,11 @@ class AndroidHelperImpl(
 		context.startActivity(intent)
 	}
 
-	override suspend fun showMakeDeviceDiscoverableDialog() = suspendCancellableCoroutine { continuation ->
+	override suspend fun showMakeDeviceDiscoverableDialog(seconds: Int) = suspendCancellableCoroutine { continuation ->
+		require(seconds in 1..300) {
+			"Seconds must be between 1 and 300"
+		}
+
 		val launcher = createLauncher(
 			contract = ActivityResultContracts.StartActivityForResult(),
 			callback = { result ->
@@ -105,13 +110,32 @@ class AndroidHelperImpl(
 			},
 		)
 		val intent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-			putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 60)
+			putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, seconds)
 		}
+
+//		context.getSharedPreferences("Bluetooth", Context.MODE_PRIVATE).edit {
+//			putInt("discoverable.seconds", seconds)
+//			putLong("discoverable.timestamp", System.currentTimeMillis())
+//		}
+
 		continuation.invokeOnCancellation {
 			launcher.unregister()
 		}
 		launcher.launch(intent)
 	}
+
+//	private fun isDeviceDiscoverable(context: Context): Boolean {
+//		val prefs = context.getSharedPreferences("Bluetooth", Context.MODE_PRIVATE)
+//		val seconds = prefs.getInt("discoverable.seconds", 0)
+//		val timestamp = prefs.getLong("discoverable.timestamp", 0L)
+//		if (seconds <= 0) {
+//			return false
+//		}
+//
+//		val elapsedSeconds = (System.currentTimeMillis() - timestamp) / 1000
+//		return elapsedSeconds < seconds && seconds <= 300
+//	}
+
 
 	override suspend fun showEnableBluetoothDialog(): Boolean = suspendCancellableCoroutine { continuation ->
 		val launcher = createLauncher(
@@ -143,6 +167,7 @@ class AndroidHelperImpl(
 		client.checkLocationSettings(settingsRequest)
 			.addOnCompleteListener { task ->
 				try {
+					@Suppress("unused", "UNUSED_VARIABLE")
 					val response = task.getResult(ApiException::class.java)
 				}
 				catch (exception: ApiException) {

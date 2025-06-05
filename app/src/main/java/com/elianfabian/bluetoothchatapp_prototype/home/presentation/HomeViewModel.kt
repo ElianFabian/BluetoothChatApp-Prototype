@@ -93,6 +93,9 @@ class HomeViewModel(
 						if (!bluetoothController.startScan()) {
 							// In some devices, at least for API level 29, if this returns false we likely
 							// need to turn on location
+							// Maybe in some cases it is not the case, we'll have to see
+							// The ideal solution would be to know in which concrete cases this is needed
+							// I think it is a combination of manufacturer and API level
 							if (androidHelper.showEnableLocationDialog()) {
 								bluetoothController.startScan()
 							}
@@ -188,7 +191,7 @@ class HomeViewModel(
 					val result = if (_useSecureConnection.value) {
 						bluetoothController.connectToDevice(action.device.address)
 					}
-					else bluetoothController.connectToDeviceInsecure(action.device.address)
+					else bluetoothController.connectToDeviceInsecurely(action.device.address)
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
 							_targetDeviceAddress.value = result.device.address
@@ -207,7 +210,7 @@ class HomeViewModel(
 					val result = if (_useSecureConnection.value) {
 						bluetoothController.connectToDevice(action.device.address)
 					}
-					else bluetoothController.connectToDeviceInsecure(action.device.address)
+					else bluetoothController.connectToDeviceInsecurely(action.device.address)
 
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
@@ -225,10 +228,16 @@ class HomeViewModel(
 			is HomeAction.LongClickPairedDevice -> {
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
 					registeredScope.launch {
-						if (bluetoothController.disconnectFromDevice(action.device.address)) {
-//							androidHelper.showToast("Disconnected from: ${action.device.name}")
+						if (!bluetoothController.disconnectFromDevice(action.device.address)) {
+							androidHelper.showToast("Could not disconnect from: ${action.device.name}")
 						}
-						else {
+					}
+				}
+			}
+			is HomeAction.LongClickScannedDevice -> {
+				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
+					registeredScope.launch {
+						if (!bluetoothController.disconnectFromDevice(action.device.address)) {
 							androidHelper.showToast("Could not disconnect from: ${action.device.name}")
 						}
 					}
@@ -316,27 +325,21 @@ class HomeViewModel(
 			}
 		}
 		registeredScope.launch {
-			val previousStates = mutableMapOf<String, BluetoothDevice.ConnectionState>()
-
-			bluetoothController.devices.collect { devices ->
-				devices.forEach { device ->
-					val previousState = previousStates[device.address]
-					val currentState = device.connectionState
-
-					if ((previousState == BluetoothDevice.ConnectionState.Connected || previousState == BluetoothDevice.ConnectionState.Disconnecting) &&
-						currentState == BluetoothDevice.ConnectionState.Disconnected
-					) {
-						androidHelper.showToast("Device '${device.name}' disconnected")
-					}
-
-					previousStates[device.address] = currentState
+			bluetoothController.state.collect { state ->
+				if (state == BluetoothController.BluetoothState.Off) {
+					_enteredBluetoothDeviceName.value = null
 				}
 			}
 		}
 		registeredScope.launch {
-			bluetoothController.state.collect { state ->
-				if (state == BluetoothController.BluetoothState.Off) {
-					_enteredBluetoothDeviceName.value = null
+			bluetoothController.events.collect { event ->
+				when (event) {
+					is BluetoothController.Event.OnDeviceConnected -> {
+						androidHelper.showToast("Device connected: '${event.connectedDevice.name}'")
+					}
+					is BluetoothController.Event.OnDeviceDisconnected -> {
+						androidHelper.showToast("Device disconnected: '${event.disconnectedDevice.name}'")
+					}
 				}
 			}
 		}

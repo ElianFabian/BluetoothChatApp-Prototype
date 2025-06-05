@@ -430,7 +430,7 @@ private fun BluetoothDeviceList(
 							onAction(HomeAction.ClickScannedDevice(device))
 						},
 						onLongClick = {
-							// no-op
+							onAction(HomeAction.LongClickScannedDevice(device))
 						},
 						modifier = Modifier
 							.fillMaxWidth()

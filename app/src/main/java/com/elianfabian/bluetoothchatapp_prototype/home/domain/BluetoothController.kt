@@ -2,11 +2,11 @@ package com.elianfabian.bluetoothchatapp_prototype.home.domain
 
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface BluetoothController {
 
-	// TODO: adapter.setName()
 	val bluetoothDeviceName: StateFlow<String?>
 	val isBluetoothSupported: Boolean
 	val canEnableBluetooth: Boolean
@@ -16,6 +16,7 @@ interface BluetoothController {
 	val isWaitingForConnection: StateFlow<Boolean>
 
 	val devices: StateFlow<List<BluetoothDevice>>
+	val events: SharedFlow<Event>
 
 	fun setBluetoothDeviceName(name: String): Boolean
 
@@ -26,7 +27,7 @@ interface BluetoothController {
 	suspend fun startInsecureBluetoothServer(): ConnectionResult
 	fun stopBluetoothServer()
 	suspend fun connectToDevice(address: String): ConnectionResult
-	suspend fun connectToDeviceInsecure(address: String): ConnectionResult
+	suspend fun connectToDeviceInsecurely(address: String): ConnectionResult
 	suspend fun disconnectFromDevice(address: String): Boolean
 	fun listenMessagesFrom(address: String): Flow<BluetoothMessage>
 
@@ -44,5 +45,21 @@ interface BluetoothController {
 	sealed interface ConnectionResult {
 		data class ConnectionEstablished(val device: BluetoothDevice) : ConnectionResult
 		data object CouldNotConnect : ConnectionResult
+	}
+
+	sealed interface Event {
+		data class OnDeviceConnected(
+			val connectedDevice: BluetoothDevice,
+			// This indicates whether you connected to a device as a server or intentionally chose which one to connect to
+			val manuallyConnected: Boolean,
+		) : Event
+
+		data class OnDeviceDisconnected(
+			val disconnectedDevice: BluetoothDevice,
+			// This indicates if was the current user who intentionally disconnected the device
+			// In the case the user intentionally disconnects from the device but it was the other device
+			// who disconnected from us it will count as not manually disconnected
+			val manuallyDisconnected: Boolean,
+		) : Event
 	}
 }
