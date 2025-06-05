@@ -33,7 +33,7 @@ class PostNotificationsPermissionController(
 }
 
 
-open class BluetoothPermissionController(
+class BluetoothPermissionController(
 	mainActivityHolder: MainActivityHolder,
 ) : BaseMultiplePermissionControllerImpl(mainActivityHolder) {
 	override val permissionNames: List<String>
@@ -42,8 +42,15 @@ open class BluetoothPermissionController(
 				add(Manifest.permission.BLUETOOTH_SCAN)
 				add(Manifest.permission.BLUETOOTH_CONNECT)
 			}
-			else if (Build.VERSION.SDK_INT >= 23) {
-				add(Manifest.permission.ACCESS_FINE_LOCATION)
-			}
+//			else if (Build.VERSION.SDK_INT >= 23) {
+//				add(Manifest.permission.ACCESS_FINE_LOCATION)
+//			}
 		}
+}
+
+class AccessFineLocationPermissionController(
+	mainActivityHolder: MainActivityHolder,
+) : BasePermissionControllerImpl(mainActivityHolder) {
+	override val permissionName: String
+		get() = Manifest.permission.ACCESS_FINE_LOCATION
 }

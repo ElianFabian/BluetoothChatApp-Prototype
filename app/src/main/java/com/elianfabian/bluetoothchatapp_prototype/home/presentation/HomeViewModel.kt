@@ -4,6 +4,7 @@ import android.os.Build
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.MultiplePermissionController
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 class HomeViewModel(
 	private val bluetoothController: BluetoothController,
 	private val bluetoothPermissionController: MultiplePermissionController,
+	private val accessFineLocationPermissionController: PermissionController,
 	private val androidHelper: AndroidHelper,
 	private val registeredScope: CoroutineScope,
 ) : ScopedServices.Registered {
@@ -90,6 +92,28 @@ class HomeViewModel(
 			is HomeAction.StartScan -> {
 				registeredScope.launch {
 					executeIfBluetoothRequirementsAreSatisfied {
+						if (Build.VERSION.SDK_INT < 31) {
+							val result = accessFineLocationPermissionController.request()
+							if (result == PermissionState.PermanentlyDenied) {
+								_permissionDialog.value = HomeState.PermissionDialogState(
+									title = "Permission Denied",
+									message = "Please, enable location permissions in settings to allow scanning.",
+									actionName = "Settings",
+									onAction = {
+										androidHelper.openAppSettings()
+										_permissionDialog.value = null
+									},
+									onDismissRequest = {
+										_permissionDialog.value = null
+									},
+								)
+								return@executeIfBluetoothRequirementsAreSatisfied
+							}
+							if (!result.isGranted) {
+								androidHelper.showToast("Location permission is needed to scan")
+								return@executeIfBluetoothRequirementsAreSatisfied
+							}
+						}
 						if (!bluetoothController.startScan()) {
 							// In some devices, at least for API level 29, if this returns false we likely
 							// need to turn on location
@@ -206,6 +230,10 @@ class HomeViewModel(
 				}
 			}
 			is HomeAction.ClickScannedDevice -> {
+				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
+					_targetDeviceAddress.value = action.device.address
+					return
+				}
 				registeredScope.launch {
 					val result = if (_useSecureConnection.value) {
 						bluetoothController.connectToDevice(action.device.address)
@@ -272,15 +300,11 @@ class HomeViewModel(
 
 	private suspend fun executeIfBluetoothRequirementsAreSatisfied(action: suspend () -> Unit) {
 		val result = bluetoothPermissionController.request()
-		if (result.values.all { it == PermissionState.PermanentlyDenied }) {
-			val feature = if (Build.VERSION.SDK_INT >= 31) {
-				"bluetooth"
-			}
-			else "location"
-
+		println("$$$$ bluetooth permission result = $result")
+		if (result.isNotEmpty() && result.values.all { it == PermissionState.PermanentlyDenied }) {
 			_permissionDialog.value = HomeState.PermissionDialogState(
 				title = "Permission Denied",
-				message = "Please, enable $feature permissions in settings.",
+				message = "Please, enable bluetooth permissions in settings.",
 				actionName = "Settings",
 				onAction = {
 					androidHelper.openAppSettings()
@@ -290,6 +314,10 @@ class HomeViewModel(
 					_permissionDialog.value = null
 				},
 			)
+			return
+		}
+		if (result.values.any { !it.isGranted }) {
+			androidHelper.showToast("You have to grant the permissions to perform the operation")
 			return
 		}
 
@@ -303,10 +331,10 @@ class HomeViewModel(
 			else {
 				androidHelper.showToast("Please, enable Bluetooth to perform the operation.")
 			}
+			return
 		}
-		else {
-			action()
-		}
+
+		action()
 	}
 
 

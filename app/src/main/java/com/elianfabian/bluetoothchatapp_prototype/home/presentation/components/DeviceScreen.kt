@@ -79,6 +79,12 @@ fun DeviceScreen(
 					modifier = Modifier.padding(16.dp)
 				) {
 					Text(
+						text = dialogState.title,
+						fontSize = 18.sp,
+						fontWeight = FontWeight.SemiBold,
+					)
+					Spacer(Modifier.height(8.dp))
+					Text(
 						text = dialogState.message,
 					)
 					Spacer(modifier = Modifier.height(16.dp))

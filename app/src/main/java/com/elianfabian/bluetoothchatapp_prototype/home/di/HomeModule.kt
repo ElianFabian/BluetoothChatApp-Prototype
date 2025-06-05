@@ -1,6 +1,8 @@
 package com.elianfabian.bluetoothchatapp_prototype.home.di
 
+import com.elianfabian.bluetoothchatapp_prototype.common.data.AccessFineLocationPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.data.BluetoothPermissionController
+import com.elianfabian.bluetoothchatapp_prototype.common.data.MainActivityHolder
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.CoroutineScopedServiceModule
 import com.elianfabian.bluetoothchatapp_prototype.home.data.BluetoothControllerImpl
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
@@ -13,9 +15,10 @@ data object HomeModule : CoroutineScopedServiceModule() {
 
 	override fun bindModuleServices(serviceBinder: ServiceBinder) {
 
-		val bluetoothPermissionController = BluetoothPermissionController(
-			mainActivityHolder = serviceBinder.lookup(),
-		)
+		val mainActivityHolder = serviceBinder.lookup<MainActivityHolder>()
+
+		val bluetoothPermissionController = BluetoothPermissionController(mainActivityHolder)
+		val accessFineLocationPermissionController = AccessFineLocationPermissionController(mainActivityHolder)
 
 		val bluetoothController: BluetoothController = BluetoothControllerImpl(
 			mainActivityHolder = serviceBinder.lookup(),
@@ -26,6 +29,7 @@ data object HomeModule : CoroutineScopedServiceModule() {
 		val viewModel = HomeViewModel(
 			bluetoothController = bluetoothController,
 			bluetoothPermissionController = bluetoothPermissionController,
+			accessFineLocationPermissionController = accessFineLocationPermissionController,
 			androidHelper = serviceBinder.lookup(),
 			registeredScope = registeredScope,
 		)
