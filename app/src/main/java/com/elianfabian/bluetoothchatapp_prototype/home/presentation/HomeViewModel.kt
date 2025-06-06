@@ -212,6 +212,12 @@ class HomeViewModel(
 					return
 				}
 				registeredScope.launch {
+					if (action.device.connectionState == BluetoothDevice.ConnectionState.Connecting) {
+						bluetoothController.cancelConnectionAttempt(action.device.address).also {
+							println("$$$ cancelConnectionAttempt result1 = $it")
+						}
+						return@launch
+					}
 					val result = if (_useSecureConnection.value) {
 						bluetoothController.connectToDevice(action.device.address)
 					}
@@ -235,6 +241,12 @@ class HomeViewModel(
 					return
 				}
 				registeredScope.launch {
+					if (action.device.connectionState == BluetoothDevice.ConnectionState.Connecting) {
+						bluetoothController.cancelConnectionAttempt(action.device.address).also {
+							println("$$$ cancelConnectionAttempt result2 = $it")
+						}
+						return@launch
+					}
 					val result = if (_useSecureConnection.value) {
 						bluetoothController.connectToDevice(action.device.address)
 					}

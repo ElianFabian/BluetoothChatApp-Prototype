@@ -533,7 +533,10 @@ class BluetoothControllerImpl(
 		}
 
 		// If the clientSocket is null it should mean it was already disconnected
-		val clientSocket = _clientSocketByAddress[address] ?: return true
+		val clientSocket = _clientSocketByAddress[address] ?: return false
+		if (!clientSocket.isConnected) {
+			return false
+		}
 
 		val manuallyDisconnected = try {
 			println("$$$$$ start send empty byte array")
@@ -549,45 +552,69 @@ class BluetoothControllerImpl(
 		}
 
 		println("$$$$$ disconnectFromDevice isConnected: ${clientSocket.isConnected}")
-		if (clientSocket.isConnected) {
-			try {
-				clientSocket.close()
-				_clientSocketByAddress.remove(address)
+		try {
+			clientSocket.close()
+			_clientSocketByAddress.remove(address)
 
-				_events.emit(
-					BluetoothController.Event.OnDeviceDisconnected(
-						disconnectedDevice = _devices.value.first { it.address == address },
-						manuallyDisconnected = manuallyDisconnected,
-					)
+			_events.emit(
+				BluetoothController.Event.OnDeviceDisconnected(
+					disconnectedDevice = _devices.value.first { it.address == address },
+					manuallyDisconnected = manuallyDisconnected,
 				)
+			)
 
-				_devices.update { devices ->
-					devices.map { device ->
-						if (device.address == address) {
-							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
-						}
-						else device
+			_devices.update { devices ->
+				devices.map { device ->
+					if (device.address == address) {
+						device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
 					}
+					else device
 				}
-				updateDevices()
-				println("$$$$$ disconnectFromDevice effectively disconnected: $clientSocket")
-				return true
 			}
-			catch (e: IOException) {
-				println("$$$$$ disconnectFromDevice() error closing socket: ${e.message}")
-			}
+			updateDevices()
+			println("$$$$$ disconnectFromDevice effectively disconnected: $clientSocket")
+			return true
 		}
-		else {
-			println("$$$$$ disconnectFromDevice() socket is not connected")
-//			_events.emit(
-//				BluetoothController.Event.DeviceDisconnected(
-//					disconnectedDevice = _devices.value.first { it.address == address },
-//					manually = false,
-//				)
-//			)
+		catch (e: IOException) {
+			println("$$$$$ disconnectFromDevice() error closing socket: ${e.message}")
 		}
 
 		return false
+	}
+
+	override suspend fun cancelConnectionAttempt(address: String): Boolean {
+		if (!canEnableBluetooth) {
+			throw SecurityException("BLUETOOTH_CONNECT permission was not granted.")
+		}
+		if (!_bluetoothState.value.isOn) {
+			return false
+		}
+
+		val clientSocket = _clientSocketByAddress[address] ?: return false
+
+		if (clientSocket.isConnected) {
+			return false
+		}
+
+		try {
+			clientSocket.close()
+			_clientSocketByAddress.remove(address)
+
+			_devices.update { devices ->
+				devices.map { device ->
+					if (device.address == address) {
+						device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+					}
+					else device
+				}
+			}
+		}
+		catch (e: IOException) {
+			println("$$$ cancelConnectionAttempt error: $e")
+			return false
+		}
+
+		return true
 	}
 
 	private suspend fun BluetoothServerSocket.tryAccept(): BluetoothSocket? {

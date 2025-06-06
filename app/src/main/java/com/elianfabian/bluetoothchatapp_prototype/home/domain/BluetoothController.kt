@@ -29,6 +29,7 @@ interface BluetoothController {
 	suspend fun connectToDevice(address: String): ConnectionResult
 	suspend fun connectToDeviceInsecurely(address: String): ConnectionResult
 	suspend fun disconnectFromDevice(address: String): Boolean
+	suspend fun cancelConnectionAttempt(address: String): Boolean
 	fun listenMessagesFrom(address: String): Flow<BluetoothMessage>
 
 	suspend fun trySendMessage(address: String, message: String): BluetoothMessage?
