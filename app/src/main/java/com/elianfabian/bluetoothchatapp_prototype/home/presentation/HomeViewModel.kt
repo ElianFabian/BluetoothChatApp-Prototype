@@ -8,6 +8,7 @@ import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionContro
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
+import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeState.*
 import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
@@ -29,28 +30,27 @@ class HomeViewModel(
 	private val _permissionDialog = MutableStateFlow<HomeState.PermissionDialogState?>(null)
 	private val _messages = MutableStateFlow<List<BluetoothMessage>>(emptyList())
 	private val _enteredMessage = MutableStateFlow("")
-	private val _targetDeviceAddress = MutableStateFlow<String?>(null)
 	private val _enteredBluetoothDeviceName = MutableStateFlow<String?>(null)
 	private val _useSecureConnection = MutableStateFlow(true)
+	private val _selectedDevice = MutableStateFlow<BluetoothDevice?>(null)
 
 	val state = combineTuple(
 		bluetoothController.devices,
 		bluetoothController.isScanning,
 		bluetoothController.state,
-		bluetoothPermissionController.state,
 		_permissionDialog,
 		bluetoothController.bluetoothDeviceName,
 		_messages,
 		_enteredMessage,
-		_targetDeviceAddress,
 		bluetoothController.isWaitingForConnection,
 		_enteredBluetoothDeviceName,
 		_useSecureConnection,
+		_selectedDevice,
 	).map {
 			(
-				devices, isScanning, bluetoothState, state, permissionDialog, bluetoothName,
-				messages, enteredMessage, targetDeviceAddress, isWaitingForConnection, enteredBluetoothDeviceName,
-				useSecureConnection,
+				devices, isScanning, bluetoothState, permissionDialog, bluetoothName,
+				messages, enteredMessage, isWaitingForConnection, enteredBluetoothDeviceName,
+				useSecureConnection, selectedDevice,
 			),
 		->
 		HomeState(
@@ -64,15 +64,17 @@ class HomeViewModel(
 			}.sortedByDescending {
 				it.connectionState == BluetoothDevice.ConnectionState.Connected
 			},
+			selectedDevice = selectedDevice,
+			connectedDevices = devices.filter {
+				it.connectionState == BluetoothDevice.ConnectionState.Connected
+			},
 			isScanning = isScanning,
 			isBluetoothSupported = bluetoothController.isBluetoothSupported,
 			isBluetoothOn = bluetoothState.isOn,
-			permissionState = state.values.toList(),
 			permissionDialog = permissionDialog,
 			bluetoothDeviceName = bluetoothName,
 			messages = messages,
 			enteredMessage = enteredMessage,
-			targetDeviceAddress = targetDeviceAddress,
 			isWaitingForConnection = isWaitingForConnection,
 			enteredBluetoothDeviceName = enteredBluetoothDeviceName,
 			useSecureConnection = useSecureConnection,
@@ -83,7 +85,6 @@ class HomeViewModel(
 		initialValue = HomeState(
 			isBluetoothSupported = bluetoothController.isBluetoothSupported,
 			isBluetoothOn = bluetoothController.state.value.isOn,
-			permissionState = bluetoothPermissionController.state.value.values.toList(),
 		),
 	)
 
@@ -95,7 +96,7 @@ class HomeViewModel(
 						if (Build.VERSION.SDK_INT < 31) {
 							val result = accessFineLocationPermissionController.request()
 							if (result == PermissionState.PermanentlyDenied) {
-								_permissionDialog.value = HomeState.PermissionDialogState(
+								_permissionDialog.value = PermissionDialogState(
 									title = "Permission Denied",
 									message = "Please, enable location permissions in settings to allow scanning.",
 									actionName = "Settings",
@@ -142,7 +143,6 @@ class HomeViewModel(
 						else bluetoothController.startInsecureBluetoothServer()
 						when (result) {
 							is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-								_targetDeviceAddress.value = result.device.address
 								bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 									_messages.update {
 										it + message
@@ -169,7 +169,7 @@ class HomeViewModel(
 				}
 			}
 			is HomeAction.SendMessage -> {
-				val targetDeviceAddress = _targetDeviceAddress.value
+				val targetDeviceAddress = _selectedDevice.value?.address
 				if (targetDeviceAddress == null) {
 					androidHelper.showToast("Please, select a connected device to mark it as target.")
 					return
@@ -208,7 +208,7 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickPairedDevice -> {
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
-					_targetDeviceAddress.value = action.device.address
+					_selectedDevice.value = action.device
 					return
 				}
 				registeredScope.launch {
@@ -218,7 +218,7 @@ class HomeViewModel(
 					else bluetoothController.connectToDeviceInsecurely(action.device.address)
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-							_targetDeviceAddress.value = result.device.address
+							_selectedDevice.value = result.device
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
@@ -231,7 +231,7 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickScannedDevice -> {
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
-					_targetDeviceAddress.value = action.device.address
+					_selectedDevice.value = action.device
 					return
 				}
 				registeredScope.launch {
@@ -242,7 +242,6 @@ class HomeViewModel(
 
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-							_targetDeviceAddress.value = result.device.address
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
@@ -273,7 +272,9 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickMessage -> {
 				if (!action.message.isFromLocalUser) {
-					_targetDeviceAddress.value = action.message.senderAddress
+					_selectedDevice.value = bluetoothController.devices.value.find { device ->
+						device.address == action.message.senderAddress
+					}
 				}
 			}
 			is HomeAction.EditBluetoothDeviceName -> {
@@ -294,6 +295,9 @@ class HomeViewModel(
 			}
 			is HomeAction.CheckUseSecureConnection -> {
 				_useSecureConnection.value = action.enabled
+			}
+			is HomeAction.SelectTargetDeviceToMessage -> {
+				_selectedDevice.value = action.connectedDevice
 			}
 		}
 	}
@@ -344,15 +348,6 @@ class HomeViewModel(
 		// so we just manually stop it ourselves.
 		bluetoothController.stopScan()
 		registeredScope.launch {
-			bluetoothController.devices.collect { devices ->
-				devices.forEach { device ->
-					if (device.connectionState == BluetoothDevice.ConnectionState.Disconnected && device.address == _targetDeviceAddress.value) {
-						_targetDeviceAddress.value = null
-					}
-				}
-			}
-		}
-		registeredScope.launch {
 			bluetoothController.state.collect { state ->
 				if (state == BluetoothController.BluetoothState.Off) {
 					_enteredBluetoothDeviceName.value = null
@@ -363,10 +358,14 @@ class HomeViewModel(
 			bluetoothController.events.collect { event ->
 				when (event) {
 					is BluetoothController.Event.OnDeviceConnected -> {
+						_selectedDevice.value = event.connectedDevice
 						androidHelper.showToast("Device connected: '${event.connectedDevice.name}'")
 					}
 					is BluetoothController.Event.OnDeviceDisconnected -> {
 						androidHelper.showToast("Device disconnected: '${event.disconnectedDevice.name}'")
+						if (_selectedDevice.value?.address == event.disconnectedDevice.address) {
+							_selectedDevice.value = null
+						}
 					}
 				}
 			}

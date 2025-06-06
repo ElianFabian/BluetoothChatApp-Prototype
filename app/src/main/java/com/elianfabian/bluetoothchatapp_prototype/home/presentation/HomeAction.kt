@@ -7,7 +7,7 @@ sealed interface HomeAction {
 	data object StartScan : HomeAction
 	data object StopScan : HomeAction
 	data object StartServer : HomeAction
-	data object StopServer: HomeAction
+	data object StopServer : HomeAction
 	data object OpenBluetoothSettings : HomeAction
 	data object OpenDeviceInfoSettings : HomeAction
 	data object MakeDeviceDiscoverable : HomeAction
@@ -22,4 +22,5 @@ sealed interface HomeAction {
 	data object SaveBluetoothDeviceName : HomeAction
 	data class EnterBluetoothDeviceName(val bluetoothDeviceName: String) : HomeAction
 	data class CheckUseSecureConnection(val enabled: Boolean) : HomeAction
+	data class SelectTargetDeviceToMessage(val connectedDevice: BluetoothDevice) : HomeAction
 }

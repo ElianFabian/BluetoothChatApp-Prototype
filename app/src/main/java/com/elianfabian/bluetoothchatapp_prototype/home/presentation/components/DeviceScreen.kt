@@ -33,6 +33,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +42,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -141,7 +147,56 @@ fun DeviceScreen(
 					.padding(horizontal = 8.dp)
 					.padding(top = 8.dp, bottom = 3.dp)
 			) {
-				Text(text = "Target device address: ${state.targetDeviceAddress ?: "None"}")
+				var isDeviceSelectorExpanded by remember {
+					mutableStateOf(false)
+				}
+
+				if (state.connectedDevices.isEmpty()) {
+					Text(text = "No connected devices")
+				}
+				else {
+					Card(
+						onClick = {
+							isDeviceSelectorExpanded = true
+						},
+					) {
+						if (state.selectedDevice != null) {
+							Column(
+								verticalArrangement = Arrangement.Center,
+								modifier = Modifier
+									.fillMaxWidth()
+									.padding(8.dp)
+							) {
+								Text(text = state.selectedDevice.name ?: "(No name)")
+								Spacer(Modifier.height(4.dp))
+								Text(text = state.selectedDevice.address)
+							}
+						}
+						else {
+							Text(text = "No selected device")
+						}
+					}
+				}
+				DropdownMenu(
+					expanded = isDeviceSelectorExpanded,
+					onDismissRequest = {
+						isDeviceSelectorExpanded = false
+					},
+					modifier = Modifier.fillMaxWidth()
+				) {
+					state.connectedDevices.forEach { device ->
+						DropdownMenuItem(
+							text = {
+								Text(text = device.name ?: device.address)
+							},
+							onClick = {
+								onAction(HomeAction.SelectTargetDeviceToMessage(device))
+								isDeviceSelectorExpanded = false
+							},
+						)
+					}
+				}
+
 				Spacer(Modifier.height(8.dp))
 				Row(
 					verticalAlignment = Alignment.Top,

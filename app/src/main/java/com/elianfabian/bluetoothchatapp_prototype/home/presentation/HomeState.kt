@@ -1,7 +1,6 @@
 package com.elianfabian.bluetoothchatapp_prototype.home.presentation
 
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
-import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
 
 data class HomeState(
@@ -13,11 +12,11 @@ data class HomeState(
 	val isScanning: Boolean = false,
 	val pairedDevices: List<BluetoothDevice> = emptyList(),
 	val scannedDevices: List<BluetoothDevice> = emptyList(),
-	val permissionState: List<PermissionState> = emptyList(),
+	val connectedDevices: List<BluetoothDevice> = emptyList(),
+	val selectedDevice: BluetoothDevice? = null,
 	val permissionDialog: PermissionDialogState? = null,
 	val messages: List<BluetoothMessage> = emptyList(),
 	val enteredMessage: String = "",
-	val targetDeviceAddress: String? = null,
 	val useSecureConnection: Boolean = true,
 ) {
 	data class PermissionDialogState(
