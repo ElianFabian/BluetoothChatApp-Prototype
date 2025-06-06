@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -614,13 +616,25 @@ class BluetoothControllerImpl(
 	private suspend fun BluetoothSocket.tryConnect(): Boolean {
 		return withContext(Dispatchers.IO) {
 			try {
-				// If device is not paired it will show a pop-up dialog to pair it
+				// If device is not paired it will show a pop-up dialog to pair it (if the connection is done securely)
 				println("$$$$$ tryConnect")
 				connect()
 				return@withContext true
 			}
 			catch (e: IOException) {
 				println("$$$$$ tryConnect error: $e")
+				// This message can happen when you try to connect to a device that is not acting as a server (and probably in more cases),
+				// but also sometimes it just throws the error when you try to connect, because of this
+				// we try to connect again.
+				if (e.message.orEmpty().contains("read failed, socket might closed or timeout")) {
+					try {
+						connect()
+						return@withContext true
+					}
+					catch (e: IOException) {
+						println("$$$ inner error: $e")
+					}
+				}
 				close()
 				return@withContext false
 			}
