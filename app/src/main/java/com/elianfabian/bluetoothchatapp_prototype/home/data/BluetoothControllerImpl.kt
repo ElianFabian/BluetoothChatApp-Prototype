@@ -65,7 +65,20 @@ class BluetoothControllerImpl(
 
 					_devices.update { devices ->
 						devices.map { device ->
-							device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+							val disconnectedDevice = device.copy(connectionState = BluetoothDevice.ConnectionState.Disconnected)
+
+							if (device.connectionState == BluetoothDevice.ConnectionState.Connected) {
+								registeredScope.launch {
+									_events.emit(
+										BluetoothController.Event.OnDeviceDisconnected(
+											disconnectedDevice = disconnectedDevice,
+											manuallyDisconnected = true,
+										)
+									)
+								}
+							}
+
+							disconnectedDevice
 						}
 					}
 				}
