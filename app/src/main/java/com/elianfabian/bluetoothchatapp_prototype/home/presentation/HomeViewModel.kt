@@ -8,7 +8,6 @@ import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionContro
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothController
 import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
-import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeState.*
 import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +31,7 @@ class HomeViewModel(
 	private val _enteredMessage = MutableStateFlow("")
 	private val _enteredBluetoothDeviceName = MutableStateFlow<String?>(null)
 	private val _useSecureConnection = MutableStateFlow(true)
-	private val _selectedDevice = MutableStateFlow<BluetoothDevice?>(null)
+	private val _selectedDevice = MutableStateFlow<HomeState.SelectedDevice>(HomeState.SelectedDevice.None)
 
 	val state = combineTuple(
 		bluetoothController.devices,
@@ -96,7 +95,7 @@ class HomeViewModel(
 						if (Build.VERSION.SDK_INT < 31) {
 							val result = accessFineLocationPermissionController.request()
 							if (result == PermissionState.PermanentlyDenied) {
-								_permissionDialog.value = PermissionDialogState(
+								_permissionDialog.value = HomeState.PermissionDialogState(
 									title = "Permission Denied",
 									message = "Please, enable location permissions in settings to allow scanning.",
 									actionName = "Settings",
@@ -169,8 +168,8 @@ class HomeViewModel(
 				}
 			}
 			is HomeAction.SendMessage -> {
-				val targetDeviceAddress = _selectedDevice.value?.address
-				if (targetDeviceAddress == null) {
+				val selectedDevice = _selectedDevice.value
+				if (selectedDevice == HomeState.SelectedDevice.None) {
 					androidHelper.showToast("Please, select a connected device to mark it as target.")
 					return
 				}
@@ -185,22 +184,47 @@ class HomeViewModel(
 					androidHelper.showToast("Please, connect to a device before sending a message.")
 					return
 				}
-				if (connectedDevices.none { it.address == targetDeviceAddress }) {
-					androidHelper.showToast("Please, connect to the device with address: $targetDeviceAddress before sending a message.")
-					return
+				if (selectedDevice is HomeState.SelectedDevice.Device) {
+					if (connectedDevices.none { it.address == selectedDevice.device.address }) {
+						androidHelper.showToast("Please, connect to the device with address: ${selectedDevice.device.address} before sending a message.")
+						return
+					}
 				}
 				registeredScope.launch {
-					val message = bluetoothController.trySendMessage(
-						address = targetDeviceAddress,
-						message = _enteredMessage.value,
-					)
-					if (message != null) {
-						_messages.update {
-							it + message
+					when (selectedDevice) {
+						is HomeState.SelectedDevice.Device -> {
+							val message = bluetoothController.trySendMessage(
+								address = selectedDevice.device.address,
+								message = _enteredMessage.value,
+							)
+							if (message != null) {
+								_messages.update {
+									it + message
+								}
+								_enteredMessage.value = ""
+								androidHelper.closeKeyboard()
+							}
 						}
-						_enteredMessage.value = ""
-						androidHelper.closeKeyboard()
+						is HomeState.SelectedDevice.AllDevices -> {
+							bluetoothController.devices.value.filter {
+								it.connectionState == BluetoothDevice.ConnectionState.Connected
+							}.forEach { connectedDevice ->
+								val message = bluetoothController.trySendMessage(
+									address = connectedDevice.address,
+									message = _enteredMessage.value,
+								)
+								if (message != null) {
+									_messages.update {
+										it + message
+									}
+								}
+							}
+							_enteredMessage.value = ""
+							androidHelper.closeKeyboard()
+						}
+						is HomeState.SelectedDevice.None -> Unit
 					}
+
 				}
 			}
 			is HomeAction.EnterMessage -> {
@@ -208,7 +232,7 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickPairedDevice -> {
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
-					_selectedDevice.value = action.device
+					_selectedDevice.value = HomeState.SelectedDevice.Device(action.device)
 					return
 				}
 				registeredScope.launch {
@@ -224,7 +248,6 @@ class HomeViewModel(
 					else bluetoothController.connectToDeviceInsecurely(action.device.address)
 					when (result) {
 						is BluetoothController.ConnectionResult.ConnectionEstablished -> {
-							_selectedDevice.value = result.device
 							bluetoothController.listenMessagesFrom(result.device.address).collect { message ->
 								_messages.update {
 									it + message
@@ -237,7 +260,7 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickScannedDevice -> {
 				if (action.device.connectionState == BluetoothDevice.ConnectionState.Connected) {
-					_selectedDevice.value = action.device
+					_selectedDevice.value = HomeState.SelectedDevice.Device(action.device)
 					return
 				}
 				registeredScope.launch {
@@ -284,9 +307,11 @@ class HomeViewModel(
 			}
 			is HomeAction.ClickMessage -> {
 				if (!action.message.isFromLocalUser) {
-					_selectedDevice.value = bluetoothController.devices.value.find { device ->
+					val targetDevice = bluetoothController.devices.value.find { device ->
 						device.address == action.message.senderAddress
-					}
+					} ?: return
+
+					_selectedDevice.value = HomeState.SelectedDevice.Device(targetDevice)
 				}
 			}
 			is HomeAction.EditBluetoothDeviceName -> {
@@ -309,7 +334,10 @@ class HomeViewModel(
 				_useSecureConnection.value = action.enabled
 			}
 			is HomeAction.SelectTargetDeviceToMessage -> {
-				_selectedDevice.value = action.connectedDevice
+				_selectedDevice.value = HomeState.SelectedDevice.Device(action.connectedDevice)
+			}
+			HomeAction.SelectAllDevicesToMessage -> {
+				_selectedDevice.value = HomeState.SelectedDevice.AllDevices
 			}
 		}
 	}
@@ -370,13 +398,32 @@ class HomeViewModel(
 			bluetoothController.events.collect { event ->
 				when (event) {
 					is BluetoothController.Event.OnDeviceConnected -> {
-						_selectedDevice.value = event.connectedDevice
+						if (_selectedDevice.value == HomeState.SelectedDevice.None) {
+							_selectedDevice.value = HomeState.SelectedDevice.Device(event.connectedDevice)
+						}
 						androidHelper.showToast("Device connected: '${event.connectedDevice.name}'")
 					}
 					is BluetoothController.Event.OnDeviceDisconnected -> {
 						androidHelper.showToast("Device disconnected: '${event.disconnectedDevice.name}'")
-						if (_selectedDevice.value?.address == event.disconnectedDevice.address) {
-							_selectedDevice.value = null
+
+						_selectedDevice.update { selection ->
+							when (selection) {
+								is HomeState.SelectedDevice.AllDevices -> {
+									val connectedDevices = bluetoothController.devices.value.filter {
+										it.connectionState == BluetoothDevice.ConnectionState.Connected
+									}
+									if (connectedDevices.isNotEmpty()) {
+										HomeState.SelectedDevice.AllDevices
+									}
+									else HomeState.SelectedDevice.None
+								}
+								is HomeState.SelectedDevice.Device -> {
+									HomeState.SelectedDevice.None
+								}
+								is HomeState.SelectedDevice.None -> {
+									HomeState.SelectedDevice.None
+								}
+							}
 						}
 					}
 				}

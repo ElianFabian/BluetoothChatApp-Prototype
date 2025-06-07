@@ -160,20 +160,31 @@ fun DeviceScreen(
 							isDeviceSelectorExpanded = true
 						},
 					) {
-						if (state.selectedDevice != null) {
-							Column(
-								verticalArrangement = Arrangement.Center,
-								modifier = Modifier
-									.fillMaxWidth()
-									.padding(8.dp)
-							) {
-								Text(text = state.selectedDevice.name ?: "(No name)")
-								Spacer(Modifier.height(4.dp))
-								Text(text = state.selectedDevice.address)
+						Column(
+							verticalArrangement = Arrangement.Center,
+							modifier = Modifier
+								.fillMaxWidth()
+								.padding(8.dp)
+						) {
+							when (state.selectedDevice) {
+								is HomeState.SelectedDevice.AllDevices -> {
+									Text(
+										text = "All devices",
+										fontWeight = FontWeight.Bold,
+									)
+								}
+								is HomeState.SelectedDevice.Device -> {
+									val device = state.selectedDevice.device
+
+									Text(text = device.name ?: "(No name)")
+									Spacer(Modifier.height(4.dp))
+									Text(text = device.address)
+								}
+
+								is HomeState.SelectedDevice.None -> {
+									Text(text = "No selected device")
+								}
 							}
-						}
-						else {
-							Text(text = "No selected device")
 						}
 					}
 				}
@@ -191,6 +202,21 @@ fun DeviceScreen(
 							},
 							onClick = {
 								onAction(HomeAction.SelectTargetDeviceToMessage(device))
+								isDeviceSelectorExpanded = false
+							},
+						)
+					}
+					if (state.connectedDevices.isNotEmpty()) {
+						DropdownMenuItem(
+							text = {
+								Text(
+									text = "All devices",
+									fontWeight = FontWeight.Bold,
+									fontSize = 16.sp,
+								)
+							},
+							onClick = {
+								onAction(HomeAction.SelectAllDevicesToMessage)
 								isDeviceSelectorExpanded = false
 							},
 						)

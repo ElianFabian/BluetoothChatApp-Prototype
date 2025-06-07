@@ -13,7 +13,7 @@ data class HomeState(
 	val pairedDevices: List<BluetoothDevice> = emptyList(),
 	val scannedDevices: List<BluetoothDevice> = emptyList(),
 	val connectedDevices: List<BluetoothDevice> = emptyList(),
-	val selectedDevice: BluetoothDevice? = null,
+	val selectedDevice: SelectedDevice = SelectedDevice.None,
 	val permissionDialog: PermissionDialogState? = null,
 	val messages: List<BluetoothMessage> = emptyList(),
 	val enteredMessage: String = "",
@@ -26,4 +26,10 @@ data class HomeState(
 		val onAction: () -> Unit,
 		val onDismissRequest: () -> Unit,
 	)
+
+	sealed interface SelectedDevice {
+		data class Device(val device: BluetoothDevice): SelectedDevice
+		data object AllDevices : SelectedDevice
+		data object None : SelectedDevice
+	}
 }
