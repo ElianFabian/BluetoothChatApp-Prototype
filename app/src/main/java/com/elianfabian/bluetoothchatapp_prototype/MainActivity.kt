@@ -1,6 +1,7 @@
 package com.elianfabian.bluetoothchatapp_prototype
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -16,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
+import com.elianfabian.bluetoothchatapp_prototype.common.data.service.BluetoothService
 import com.elianfabian.bluetoothchatapp_prototype.common.di.GlobalServiceProvider
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.FragmentStateChanger
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.ProcessDeathKeyFilter
@@ -64,6 +66,8 @@ class MainActivity : FragmentActivity() {
 
 		val fragmentStateChanger = FragmentStateChanger(supportFragmentManager, fragmentContainerView.id)
 
+		val globalServicesProvider = (application as BluetoothApplication).globalServicesProvider
+
 		Navigator.configure()
 			.setBackHandlingModel(BackHandlingModel.AHEAD_OF_TIME)
 			.setStateChanger(
@@ -72,12 +76,9 @@ class MainActivity : FragmentActivity() {
 				}
 			)
 			.setScopedServices(DefaultServiceProvider())
-			.setGlobalServices(
-				GlobalServiceProvider(
-					application = application,
-					mainActivity = this,
-				)
-			)
+			.setGlobalServices { backstack ->
+				globalServicesProvider.create(backstack, this)
+			}
 			.setKeyFilter(ProcessDeathKeyFilter())
 			.install(
 				this,
@@ -106,7 +107,8 @@ class MainActivity : FragmentActivity() {
 			backstack.forEachServiceOfType<MainActivityCallbacks> { service ->
 				service.onDestroyMainActivity(this)
 			}
-		} catch (t: Throwable) {
+		}
+		catch (t: Throwable) {
 			t.printStackTrace()
 		}
 	}

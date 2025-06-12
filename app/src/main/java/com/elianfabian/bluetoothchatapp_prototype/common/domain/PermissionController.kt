@@ -22,3 +22,9 @@ enum class PermissionState {
 
 	val isGranted: Boolean get() = this == Granted
 }
+
+val Map<String, PermissionState>.allAreGranted: Boolean
+	get() = this.values.all { it.isGranted } || this.isEmpty()
+
+val Map<String, PermissionState>.allArePermanentlyDenied: Boolean
+	get() = this.values.all { it == PermissionState.PermanentlyDenied } && this.isNotEmpty()

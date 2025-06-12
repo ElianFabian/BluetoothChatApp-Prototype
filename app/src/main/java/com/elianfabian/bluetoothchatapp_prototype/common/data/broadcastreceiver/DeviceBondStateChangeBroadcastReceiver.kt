@@ -1,8 +1,9 @@
-package com.elianfabian.bluetoothchatapp_prototype.home.data
+package com.elianfabian.bluetoothchatapp_prototype.common.data.broadcastreceiver
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.elianfabian.bluetoothchatapp_prototype.home.data.AndroidBluetoothDevice
 
 class DeviceBondStateChangeBroadcastReceiver(
 	private val onStateChange: (device: AndroidBluetoothDevice, state: Int) -> Unit,

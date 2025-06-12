@@ -1,4 +1,4 @@
-package com.elianfabian.bluetoothchatapp_prototype.home.domain
+package com.elianfabian.bluetoothchatapp_prototype.common.domain
 
 data class BluetoothDevice(
 	val name: String?,

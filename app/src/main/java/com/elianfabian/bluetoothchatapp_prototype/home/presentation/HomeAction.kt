@@ -1,7 +1,7 @@
 package com.elianfabian.bluetoothchatapp_prototype.home.presentation
 
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
-import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothDevice
 
 sealed interface HomeAction {
 	data object StartScan : HomeAction

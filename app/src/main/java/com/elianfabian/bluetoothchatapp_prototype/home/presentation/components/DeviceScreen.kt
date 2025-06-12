@@ -59,7 +59,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.compose.BasePreview
-import com.elianfabian.bluetoothchatapp_prototype.home.domain.BluetoothDevice
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothDevice
 import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeAction
 import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeState
 import kotlin.random.Random
@@ -234,8 +234,14 @@ fun DeviceScreen(
 							onAction(HomeAction.EnterMessage(value))
 						},
 						placeholder = {
-							Text("Message to send")
+							Text(
+								text = if (state.isBluetoothOn) {
+									"Message to send"
+								}
+								else "Bluetooth is off"
+							)
 						},
+						enabled = state.isBluetoothOn,
 						modifier = Modifier
 							.weight(1f)
 					)
@@ -243,6 +249,7 @@ fun DeviceScreen(
 						onClick = {
 							onAction(HomeAction.SendMessage)
 						},
+						enabled = state.isBluetoothOn,
 						modifier = Modifier
 							.size(56.dp)
 					) {
@@ -707,6 +714,7 @@ private fun Preview() = BasePreview {
 			isBluetoothSupported = true,
 			isScanning = true,
 			isBluetoothOn = true,
+			useSecureConnection = false,
 //			permissionDialog = HomeState.PermissionDialogState(
 //				title = "Permission Denied",
 //				message = "Please, enable Bluetooth permissions in settings.",
@@ -734,6 +742,7 @@ private fun Preview() = BasePreview {
 					isFromLocalUser = index % 2 == 0,
 					senderName = null,
 					senderAddress = "XX:60:E2:XX:98:XX",
+					isRead = true,
 				)
 			}
 		),

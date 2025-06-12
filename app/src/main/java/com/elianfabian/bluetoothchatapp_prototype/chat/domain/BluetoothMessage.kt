@@ -5,4 +5,5 @@ data class BluetoothMessage(
 	val senderAddress: String,
 	val content: String,
 	val isFromLocalUser: Boolean,
+	val isRead: Boolean,
 )

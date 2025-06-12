@@ -2,11 +2,20 @@ package com.elianfabian.bluetoothchatapp_prototype.common.di
 
 import android.app.Application
 import android.content.Context
-import androidx.fragment.app.FragmentActivity
+import com.elianfabian.bluetoothchatapp_prototype.MainActivity
+import com.elianfabian.bluetoothchatapp_prototype.common.data.AccessFineLocationPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.data.AndroidHelperImpl
+import com.elianfabian.bluetoothchatapp_prototype.common.data.ApplicationOrchestrator
+import com.elianfabian.bluetoothchatapp_prototype.common.data.BluetoothControllerImpl
+import com.elianfabian.bluetoothchatapp_prototype.common.data.BluetoothPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.data.MainActivityHolder
+import com.elianfabian.bluetoothchatapp_prototype.common.data.NotificationControllerImpl
+import com.elianfabian.bluetoothchatapp_prototype.common.data.PostNotificationsPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.data.ReadContactsPermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothController
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.NotificationController
+import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeViewModel
 import com.zhuinden.simplestack.Backstack
 import com.zhuinden.simplestack.GlobalServices
 import com.zhuinden.simplestack.ServiceBinder
@@ -18,17 +27,23 @@ import kotlinx.coroutines.SupervisorJob
 
 class GlobalServiceProvider(
 	private val application: Application,
-	mainActivity: FragmentActivity,
-) : GlobalServices.Factory {
+) {
 
-	private var _mainActivity: FragmentActivity? = mainActivity
+	private var _globalServices: GlobalServices? = null
 
-	override fun create(backstack: Backstack): GlobalServices {
+
+	fun create(backstack: Backstack, mainActivity: MainActivity): GlobalServices {
+
+		if (_globalServices != null) {
+			return _globalServices!!
+		}
 
 		val applicationContext: Context = application
 		val applicationScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
 
-		val mainActivityHolder = MainActivityHolder(_mainActivity!!)
+		val mainActivityHolder = MainActivityHolder(mainActivity)
+
+		val bluetoothPermissionController = BluetoothPermissionController(mainActivityHolder)
 		val readContactsPermissionController = ReadContactsPermissionController(mainActivityHolder)
 
 		val androidHelper: AndroidHelper = AndroidHelperImpl(
@@ -37,17 +52,59 @@ class GlobalServiceProvider(
 			mainActivityHolder = mainActivityHolder,
 		)
 
+		val bluetoothController: BluetoothController = BluetoothControllerImpl(
+			context = applicationContext,
+			applicationScope = applicationScope,
+			bluetoothPermissionController = bluetoothPermissionController,
+			androidHelper = androidHelper,
+		)
+
+		val accessFineLocationPermissionController = AccessFineLocationPermissionController(mainActivityHolder)
+		val postNotificationsPermissionController = PostNotificationsPermissionController(mainActivityHolder)
+
+		val notificationController: NotificationController = NotificationControllerImpl(
+			context = applicationContext,
+			applicationScope = applicationScope,
+		)
+
+		val viewModel = HomeViewModel(
+			bluetoothController = bluetoothController,
+			bluetoothPermissionController = bluetoothPermissionController,
+			accessFineLocationPermissionController = accessFineLocationPermissionController,
+			postNotificationsPermissionController = postNotificationsPermissionController,
+			notificationController = notificationController,
+			androidHelper = androidHelper,
+			applicationScope = applicationScope,
+		)
+
 		val globalServices = GlobalServices.builder()
 			.add(applicationContext, ApplicationContextTag)
 			.add(applicationScope, ApplicationScopeTag)
 			.add(mainActivityHolder)
 			.add(readContactsPermissionController)
+			.add(bluetoothPermissionController)
+			.add(bluetoothController)
 			.add(androidHelper)
+			.add(viewModel)
+			.add(notificationController)
+			.add(
+				ApplicationOrchestrator(
+					context = applicationContext,
+					androidHelper = androidHelper,
+					applicationScope = applicationScope,
+					bluetoothPermissionController = bluetoothPermissionController,
+					notificationController = notificationController,
+				)
+			)
 			.build()
 
-		_mainActivity = null
+		_globalServices = globalServices
 
 		return globalServices
+	}
+
+	fun getOrNull(): GlobalServices? {
+		return _globalServices
 	}
 }
 

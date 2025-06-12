@@ -4,6 +4,7 @@ import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.database.ContentObserver
@@ -11,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -18,11 +20,13 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.edit
+import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
 import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
+import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
+import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.OnCreateApplicationCallback
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
@@ -30,6 +34,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationSettingsRequest
 import com.google.android.gms.location.LocationSettingsStatusCodes
 import com.google.android.gms.location.Priority
+import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,9 +51,33 @@ class AndroidHelperImpl(
 	private val context: Context,
 	private val applicationScope: CoroutineScope,
 	private val mainActivityHolder: MainActivityHolder,
-) : AndroidHelper {
+) : AndroidHelper,
+	ScopedServices.Registered,
+	OnCreateApplicationCallback,
+	ApplicationBackgroundStateChangeCallback {
+
+	override fun onCreateApplication() {
+
+	}
+
+	override fun onServiceRegistered() {
+		_isAppClosed = false
+	}
+
+	override fun onServiceUnregistered() {
+		_isAppClosed = true
+		//context.unregisterReceiver(_appCloseStateChangeReceiver)
+	}
 
 	private val activity: FragmentActivity get() = mainActivityHolder.mainActivity
+
+	private var _isAppInBackground = false
+	private var _isAppClosed = false
+
+
+	override fun stopApplication() {
+		Process.killProcess(Process.myPid())
+	}
 
 	override fun showToast(message: String) {
 		Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -190,10 +219,10 @@ class AndroidHelperImpl(
 									.build()
 								launcher.launch(intentSenderRequest)
 							}
-							catch (e: IntentSender.SendIntentException) {
+							catch (_: IntentSender.SendIntentException) {
 								// Ignore the error.
 							}
-							catch (e: ClassCastException) {
+							catch (_: ClassCastException) {
 								// Ignore, should be an impossible error.
 							}
 						}
@@ -214,6 +243,9 @@ class AndroidHelperImpl(
 		}
 	}
 
+	override fun isAppInBackground() = _isAppInBackground
+
+	override fun isAppClosed() = _isAppClosed
 
 	private fun <I, O> createLauncher(
 		contract: ActivityResultContract<I, O>,
@@ -241,8 +273,12 @@ class AndroidHelperImpl(
 	// This only needs to persist across configuration changes
 	private fun generateLauncherKey() = UUID.randomUUID().toString()
 
-	private fun isPermissionGranted(permission: String): Boolean {
-		return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+	override fun onAppEnteredForeground() {
+		_isAppInBackground = false
+	}
+
+	override fun onAppEnteredBackground() {
+		_isAppInBackground = true
 	}
 }
 

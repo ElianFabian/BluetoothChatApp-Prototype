@@ -1,4 +1,4 @@
-package com.elianfabian.bluetoothchatapp_prototype.home.data
+package com.elianfabian.bluetoothchatapp_prototype.common.data.broadcastreceiver
 
 import android.bluetooth.BluetoothAdapter
 import android.content.BroadcastReceiver

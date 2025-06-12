@@ -1,4 +1,4 @@
-package com.elianfabian.bluetoothchatapp_prototype.home.domain
+package com.elianfabian.bluetoothchatapp_prototype.common.domain
 
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
 import kotlinx.coroutines.flow.Flow

@@ -2,6 +2,7 @@ package com.elianfabian.bluetoothchatapp_prototype.common.domain
 
 interface AndroidHelper {
 
+	fun stopApplication()
 	fun showToast(message: String)
 
 	fun openAppSettings()
@@ -13,4 +14,7 @@ interface AndroidHelper {
 	suspend fun showEnableLocationDialog(): Boolean
 
 	fun closeKeyboard()
+
+	fun isAppInBackground(): Boolean
+	fun isAppClosed(): Boolean
 }
