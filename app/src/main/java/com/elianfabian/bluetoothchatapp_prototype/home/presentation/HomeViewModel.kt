@@ -10,6 +10,7 @@ import com.elianfabian.bluetoothchatapp_prototype.common.domain.NotificationCont
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.allArePermanentlyDenied
+import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.OnCreateApplicationCallback
 import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
@@ -30,7 +31,112 @@ class HomeViewModel(
 	private val notificationController: NotificationController,
 	private val androidHelper: AndroidHelper,
 	private val applicationScope: CoroutineScope,
-) : ScopedServices.Registered {
+) : ScopedServices.Registered,
+	OnCreateApplicationCallback {
+
+	override fun onCreateApplication() {
+		// In some devices (At least on Realme 6 API level 30), when you close and open the app
+		// again, if you were scanning it will continue scanning, which it's kind of a weird behavior,
+		// so we just manually stop it ourselves.
+		bluetoothController.stopScan()
+
+		applicationScope.launch {
+			postNotificationsPermissionController.request()
+		}
+
+		_messages.update { devices ->
+			devices.map { device ->
+				device.copy(isRead = true)
+			}
+		}
+
+		applicationScope.launch {
+			bluetoothController.state.collect { state ->
+				if (state == BluetoothController.BluetoothState.Off) {
+					_enteredBluetoothDeviceName.value = null
+				}
+			}
+		}
+		applicationScope.launch {
+			notificationController.events.collect { event ->
+				when (event) {
+					is NotificationController.NotificationEvent.OnReceiveMessageFromRemoteInput -> {
+						if (sendMessage(event.message)) {
+							notificationController.sendGroupNotificationMessage(
+								message = NotificationController.GroupMessageNotification(
+									senderName = "Me",
+									content = event.message,
+								)
+							)
+						}
+						else {
+							notificationController.stopLoadingGroupNotification()
+						}
+					}
+					else -> Unit
+				}
+			}
+		}
+		applicationScope.launch {
+			bluetoothController.events.collect { event ->
+				when (event) {
+					is BluetoothController.Event.OnDeviceConnected -> {
+						if (_selectedDevice.value == HomeState.SelectedDevice.None) {
+							_selectedDevice.value = HomeState.SelectedDevice.Device(event.connectedDevice)
+						}
+
+						launch {
+							println("$$$ device Connected: ${event.connectedDevice}, ${event.manuallyConnected}")
+							bluetoothController.listenMessagesFrom(event.connectedDevice.address).collect { message ->
+
+								val messages = _messages.updateAndGet {
+									it + message
+								}
+
+								if (androidHelper.isAppInBackground() || androidHelper.isAppClosed()) {
+									notificationController.sendGroupNotificationMessage(
+										message = messages
+											.last { !it.isFromLocalUser && !it.isRead }
+											.let {
+												NotificationController.GroupMessageNotification(
+													senderName = it.senderName ?: it.senderAddress,
+													content = it.content,
+												)
+											}
+									)
+								}
+							}
+						}
+
+						androidHelper.showToast("Device connected: '${event.connectedDevice.name}'")
+					}
+					is BluetoothController.Event.OnDeviceDisconnected -> {
+						androidHelper.showToast("Device disconnected: '${event.disconnectedDevice.name}'")
+
+						_selectedDevice.update { selection ->
+							when (selection) {
+								is HomeState.SelectedDevice.AllDevices -> {
+									val connectedDevices = bluetoothController.devices.value.filter {
+										it.connectionState == BluetoothDevice.ConnectionState.Connected
+									}
+									if (connectedDevices.isNotEmpty()) {
+										HomeState.SelectedDevice.AllDevices
+									}
+									else HomeState.SelectedDevice.None
+								}
+								is HomeState.SelectedDevice.Device -> {
+									HomeState.SelectedDevice.None
+								}
+								is HomeState.SelectedDevice.None -> {
+									HomeState.SelectedDevice.None
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
 	private val _permissionDialog = MutableStateFlow<HomeState.PermissionDialogState?>(null)
 	private val _messages = MutableStateFlow<List<BluetoothMessage>>(emptyList())
@@ -405,107 +511,7 @@ class HomeViewModel(
 
 
 	override fun onServiceRegistered() {
-		// In some devices (At least on Realme 6 API level 30), when you close and open the app
-		// again, if you were scanning it will continue scanning, which it's kind of a weird behavior,
-		// so we just manually stop it ourselves.
-		bluetoothController.stopScan()
 
-		applicationScope.launch {
-			postNotificationsPermissionController.request()
-		}
-
-		_messages.update { devices ->
-			devices.map { device ->
-				device.copy(isRead = true)
-			}
-		}
-
-		applicationScope.launch {
-			bluetoothController.state.collect { state ->
-				if (state == BluetoothController.BluetoothState.Off) {
-					_enteredBluetoothDeviceName.value = null
-				}
-			}
-		}
-		applicationScope.launch {
-			notificationController.events.collect { event ->
-				when (event) {
-					is NotificationController.NotificationEvent.OnReceiveMessageFromRemoteInput -> {
-						if (sendMessage(event.message)) {
-							notificationController.sendGroupNotificationMessage(
-								message = NotificationController.GroupMessageNotification(
-									senderName = "Me",
-									content = event.message,
-								)
-							)
-						}
-						else {
-							notificationController.stopLoadingGroupNotification()
-						}
-					}
-					else -> Unit
-				}
-			}
-		}
-		applicationScope.launch {
-			bluetoothController.events.collect { event ->
-				when (event) {
-					is BluetoothController.Event.OnDeviceConnected -> {
-						if (_selectedDevice.value == HomeState.SelectedDevice.None) {
-							_selectedDevice.value = HomeState.SelectedDevice.Device(event.connectedDevice)
-						}
-
-						launch {
-							println("$$$ device Connected: ${event.connectedDevice}, ${event.manuallyConnected}")
-							bluetoothController.listenMessagesFrom(event.connectedDevice.address).collect { message ->
-
-								val messages = _messages.updateAndGet {
-									it + message
-								}
-
-								if (androidHelper.isAppInBackground() || androidHelper.isAppClosed()) {
-									notificationController.sendGroupNotificationMessage(
-										message = messages
-											.last { !it.isFromLocalUser && !it.isRead }
-											.let {
-												NotificationController.GroupMessageNotification(
-													senderName = it.senderName ?: it.senderAddress,
-													content = it.content,
-												)
-											}
-									)
-								}
-							}
-						}
-
-						androidHelper.showToast("Device connected: '${event.connectedDevice.name}'")
-					}
-					is BluetoothController.Event.OnDeviceDisconnected -> {
-						androidHelper.showToast("Device disconnected: '${event.disconnectedDevice.name}'")
-
-						_selectedDevice.update { selection ->
-							when (selection) {
-								is HomeState.SelectedDevice.AllDevices -> {
-									val connectedDevices = bluetoothController.devices.value.filter {
-										it.connectionState == BluetoothDevice.ConnectionState.Connected
-									}
-									if (connectedDevices.isNotEmpty()) {
-										HomeState.SelectedDevice.AllDevices
-									}
-									else HomeState.SelectedDevice.None
-								}
-								is HomeState.SelectedDevice.Device -> {
-									HomeState.SelectedDevice.None
-								}
-								is HomeState.SelectedDevice.None -> {
-									HomeState.SelectedDevice.None
-								}
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 
 	override fun onServiceUnregistered() {
