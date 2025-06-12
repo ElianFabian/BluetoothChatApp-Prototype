@@ -17,6 +17,7 @@ interface BluetoothController {
 
 	val devices: StateFlow<List<BluetoothDevice>>
 	val events: SharedFlow<Event>
+	val loadingClients: StateFlow<List<LoadingClient>>
 
 	fun setBluetoothDeviceName(name: String): Boolean
 
@@ -63,4 +64,11 @@ interface BluetoothController {
 			val manuallyDisconnected: Boolean,
 		) : Event
 	}
+
+	// Represents a the progress of the reception of a message sent by some device
+	data class LoadingClient(
+		val name: String?,
+		val address: String,
+		val progress: Float,
+	)
 }

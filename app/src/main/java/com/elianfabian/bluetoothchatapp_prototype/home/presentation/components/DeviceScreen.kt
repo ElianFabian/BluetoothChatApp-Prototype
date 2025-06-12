@@ -2,6 +2,9 @@ package com.elianfabian.bluetoothchatapp_prototype.home.presentation.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -37,6 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -345,7 +349,7 @@ private fun BluetoothDeviceList(
 	modifier: Modifier = Modifier,
 ) {
 	val lazyListState = rememberLazyListState()
-	LaunchedEffect(state.messages) {
+	LaunchedEffect(state.messages, state.loadingClients) {
 		if (lazyListState.layoutInfo.totalItemsCount == 0) {
 			return@LaunchedEffect
 		}
@@ -540,7 +544,7 @@ private fun BluetoothDeviceList(
 					fontSize = 24.sp,
 				)
 			}
-			if (state.messages.isEmpty()) {
+			if (state.messages.isEmpty() && state.loadingClients.isEmpty()) {
 				item {
 					Text(
 						text = "No messages",
@@ -556,6 +560,21 @@ private fun BluetoothDeviceList(
 						senderAddress = message.senderAddress,
 						onClick = {
 							onAction(HomeAction.ClickMessage(message))
+						},
+					)
+				}
+			}
+			if (state.loadingClients.isNotEmpty()) {
+				items(state.loadingClients) { loadingClient ->
+					Message(
+						senderName = loadingClient.name,
+						isFromLocalUser = false,
+						senderAddress = loadingClient.address,
+						content = "",
+						isLoading = true,
+						progress = loadingClient.progress,
+						onClick = {
+							//onAction(HomeAction.ClickMessage(message))
 						},
 					)
 				}
@@ -638,6 +657,8 @@ private fun Message(
 	content: String,
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
+	isLoading: Boolean = false,
+	progress: Float = 0F,
 ) {
 	val backgroundColor = if (isFromLocalUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
 	val textColor = if (isFromLocalUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
@@ -669,11 +690,29 @@ private fun Message(
 				)
 				Spacer(modifier = Modifier.height(4.dp))
 			}
-			Text(
-				text = content,
-				style = MaterialTheme.typography.bodyMedium,
-				color = textColor
-			)
+			if (isLoading) {
+				val animatedProgress by animateFloatAsState(
+					targetValue = progress.coerceIn(0F, 1F),
+					animationSpec = tween(
+						durationMillis = 10,
+						easing = FastOutSlowInEasing
+					),
+					label = "AnimatedProgress",
+				)
+
+				LinearProgressIndicator(
+					progress = { animatedProgress },
+					drawStopIndicator = {},
+					modifier = Modifier.fillMaxWidth()
+				)
+			}
+			else {
+				Text(
+					text = content,
+					style = MaterialTheme.typography.bodyMedium,
+					color = textColor
+				)
+			}
 		}
 	}
 }

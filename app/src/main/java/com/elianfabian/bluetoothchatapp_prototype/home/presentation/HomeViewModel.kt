@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -157,11 +158,12 @@ class HomeViewModel(
 		_enteredBluetoothDeviceName,
 		_useSecureConnection,
 		_selectedDevice,
+		bluetoothController.loadingClients,
 	).map {
 			(
 				devices, isScanning, bluetoothState, permissionDialog, bluetoothName,
 				messages, enteredMessage, isWaitingForConnection, enteredBluetoothDeviceName,
-				useSecureConnection, selectedDevice,
+				useSecureConnection, selectedDevice, loadingClients,
 			),
 		->
 		HomeState(
@@ -189,6 +191,7 @@ class HomeViewModel(
 			isWaitingForConnection = isWaitingForConnection,
 			enteredBluetoothDeviceName = enteredBluetoothDeviceName,
 			useSecureConnection = useSecureConnection,
+			loadingClients = loadingClients,
 		)
 	}.stateIn(
 		scope = applicationScope,

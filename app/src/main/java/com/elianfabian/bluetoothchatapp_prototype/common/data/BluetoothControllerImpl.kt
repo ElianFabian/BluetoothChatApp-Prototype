@@ -30,6 +30,7 @@ import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,8 +45,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -324,6 +328,9 @@ class BluetoothControllerImpl(
 	private val _clientSocketByAddress: MutableMap<String, BluetoothSocket> = ConcurrentHashMap()
 	private val _clientJobByAddress: MutableMap<String, Job> = ConcurrentHashMap()
 	private val _clientSharedFlowByAddress: MutableMap<String, MutableSharedFlow<BluetoothMessage>> = ConcurrentHashMap()
+
+	private val _loadingClients = MutableStateFlow<List<BluetoothController.LoadingClient>>(emptyList())
+	override val loadingClients = _loadingClients.asStateFlow()
 
 
 	override fun setBluetoothDeviceName(name: String): Boolean {
@@ -851,15 +858,46 @@ class BluetoothControllerImpl(
 		return channelFlow {
 			while (isActive) {
 				try {
-					val result = inputStream.readString().also {
+					val result = inputStream.readString(
+						onRead = { progress ->
+							_loadingClients.update { clients ->
+								val client = clients.find { it.address == remoteDevice.address }
+								if (client != null) {
+									clients.map { client ->
+										if (client.address == remoteDevice.address) {
+											BluetoothController.LoadingClient(
+												name = remoteDevice.name,
+												address = remoteDevice.address,
+												progress = progress,
+											)
+										}
+										else client
+									}
+								}
+								else clients + BluetoothController.LoadingClient(
+									name = remoteDevice.name,
+									address = remoteDevice.address,
+									progress = progress,
+								)
+							}
+						}
+					).also {
 						println("$$$ stringOut = $it")
 					}
+					// Little delay for to allow the UI finish the linear progress animation.
+					// This is fine since this is just an example application.
+					delay(50)
 					send(result)
 				}
 				catch (e: IOException) {
 					println("$$$ BluetoothControllerImpl.listenForIncomingString() IOException: ${e.message}")
 					this@channelFlow.close()
 					break
+				}
+				finally {
+					_loadingClients.update { clients ->
+						clients.filter { it.address != remoteDevice.address }
+					}
 				}
 			}
 		}.flowOn(Dispatchers.IO)
@@ -872,7 +910,16 @@ class BluetoothControllerImpl(
 
 		return withContext(Dispatchers.IO) {
 			try {
-				outputStream.write(string.toByteArray())
+				val messageBytes = string.toByteArray(Charsets.UTF_8)
+				val lengthPrefix = ByteBuffer
+					.allocate(4)
+					.order(ByteOrder.BIG_ENDIAN)
+					.putInt(messageBytes.size)
+					.array()
+
+				outputStream.write(lengthPrefix)
+				outputStream.write(messageBytes)
+				outputStream.flush()
 
 				return@withContext true
 			}
@@ -911,50 +958,36 @@ class BluetoothControllerImpl(
 	}
 }
 
-fun InputStream.readBytesFully(
-	bufferSize: Int = 256,
-): ByteArray {
-	val output = ByteArrayOutputStream()
-	val buffer = ByteArray(bufferSize)
-	var bytesRead: Int
-	do {
-		bytesRead = read(buffer)
-		if (bytesRead > 0) {
-			output.write(buffer, 0, bytesRead)
-		}
-	}
-	while (bytesRead != -1)
-	return output.toByteArray()
-}
-
-fun InputStream.readBytesFully(
-	bufferSize: Int = 256,
-	onRead: (progress: Float) -> Unit,
-): ByteArray {
-	val output = ByteArrayOutputStream()
-	val buffer = ByteArray(bufferSize)
-	var bytesRead: Int
-	do {
-		bytesRead = read(buffer)
-		if (bytesRead > 0) {
-			output.write(buffer, 0, bytesRead)
-		}
-	}
-	while (bytesRead != -1)
-	return output.toByteArray()
-}
-
 fun InputStream.readString(
-	bufferSize: Int = 256,
-): String = buildString {
-	val buffer = ByteArray(bufferSize)
-	do {
-		val bytesRead: Int = read(buffer)
-		if (bytesRead <= 0) {
-			break
-		}
-		val message = buffer.decodeToString(endIndex = bytesRead)
-		append(message)
+	onRead: (progress: Float) -> Unit = {},
+): String {
+	val lengthBytes = ByteArray(4)
+	readFully(lengthBytes)
+
+	val length = ByteBuffer.wrap(lengthBytes)
+		.order(ByteOrder.BIG_ENDIAN)
+		.getInt()
+
+	val buffer = ByteArray(length)
+	onRead(0F)
+	readFully(buffer) { bytesRead ->
+		onRead(bytesRead.toFloat() / length)
 	}
-	while (available() != 0)
+
+	return buffer.decodeToString()
+}
+
+private inline fun InputStream.readFully(
+	buffer: ByteArray,
+	onProgress: (bytesRead: Int) -> Unit = {},
+) {
+	var bytesRead = 0
+	while (bytesRead < buffer.size) {
+		val read = read(buffer, bytesRead, buffer.size - bytesRead)
+		if (read == -1) {
+			throw EOFException("Stream ended prematurely")
+		}
+		bytesRead += read
+		onProgress(bytesRead)
+	}
 }
