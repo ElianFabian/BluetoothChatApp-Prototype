@@ -884,9 +884,6 @@ class BluetoothControllerImpl(
 					).also {
 						println("$$$ stringOut = $it")
 					}
-					// Little delay for to allow the UI finish the linear progress animation.
-					// This is fine since this is just an example application.
-					delay(50)
 					send(result)
 				}
 				catch (e: IOException) {

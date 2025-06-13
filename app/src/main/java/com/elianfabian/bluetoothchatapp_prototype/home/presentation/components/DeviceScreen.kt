@@ -694,7 +694,7 @@ private fun Message(
 				val animatedProgress by animateFloatAsState(
 					targetValue = progress.coerceIn(0F, 1F),
 					animationSpec = tween(
-						durationMillis = 10,
+						durationMillis = 35,
 						easing = FastOutSlowInEasing
 					),
 					label = "AnimatedProgress",

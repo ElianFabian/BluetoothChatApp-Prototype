@@ -17,11 +17,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.updateAndGet
@@ -93,6 +98,11 @@ class HomeViewModel(
 							println("$$$ device Connected: ${event.connectedDevice}, ${event.manuallyConnected}")
 							bluetoothController.listenMessagesFrom(event.connectedDevice.address).collect { message ->
 
+								// Little delay for to allow the UI finish the linear progress animation.
+								bluetoothController.loadingClients.filter { it.isEmpty() }
+								if (message.content.length > 75_000) {
+									delay(175)
+								}
 								val messages = _messages.updateAndGet {
 									it + message
 								}
@@ -163,10 +173,20 @@ class HomeViewModel(
 		_selectedDevice,
 		bluetoothController.loadingClients.debounce { loadingClients ->
 			if (loadingClients.isNotEmpty()) {
-				50
+				25
 			}
 			else 0
-		},
+		}
+			.drop(1)
+			.onEach {
+				if (it.isEmpty()) {
+					// Little delay for to allow the UI finish the linear progress animation.
+					delay(150)
+				}
+			}
+			.onStart {
+				emit(bluetoothController.loadingClients.value)
+			},
 	).map {
 			(
 				devices, isScanning, bluetoothState, permissionDialog, bluetoothName,
