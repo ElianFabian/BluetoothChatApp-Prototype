@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -30,6 +31,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
@@ -54,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -62,8 +66,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.elianfabian.bluetoothchatapp_prototype.chat.domain.BluetoothMessage
-import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.compose.BasePreview
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothDevice
+import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.compose.BasePreview
 import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeAction
 import com.elianfabian.bluetoothchatapp_prototype.home.presentation.HomeState
 import kotlin.random.Random
@@ -128,6 +132,7 @@ fun DeviceScreen(
 		}
 	}
 	else {
+		val haptics = LocalHapticFeedback.current
 		Column(
 			modifier = Modifier
 				.fillMaxSize()
@@ -252,6 +257,7 @@ fun DeviceScreen(
 					IconButton(
 						onClick = {
 							onAction(HomeAction.SendMessage)
+							haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 						},
 						enabled = state.isBluetoothOn,
 						modifier = Modifier
@@ -281,6 +287,7 @@ fun DeviceScreen(
 							else {
 								onAction(HomeAction.StartScan)
 							}
+							haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 						}
 					) {
 						AnimatedVisibility(state.isScanning) {
@@ -310,6 +317,7 @@ fun DeviceScreen(
 								else {
 									onAction(HomeAction.StartServer)
 								}
+								haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 							},
 						) {
 							AnimatedVisibility(state.isWaitingForConnection) {
@@ -332,6 +340,12 @@ fun DeviceScreen(
 						Checkbox(
 							checked = state.useSecureConnection,
 							onCheckedChange = { checked ->
+								haptics.performHapticFeedback(
+									if (checked) {
+										HapticFeedbackType.ToggleOn
+									}
+									else HapticFeedbackType.ToggleOff
+								)
 								onAction(HomeAction.CheckUseSecureConnection(checked))
 							},
 						)
@@ -355,6 +369,8 @@ private fun BluetoothDeviceList(
 		}
 		lazyListState.scrollToItem(lazyListState.layoutInfo.totalItemsCount)
 	}
+
+	val haptics = LocalHapticFeedback.current
 
 	LazyColumn(
 		state = lazyListState,
@@ -380,6 +396,7 @@ private fun BluetoothDeviceList(
 							IconButton(
 								onClick = {
 									onAction(HomeAction.SaveBluetoothDeviceName)
+									haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 								},
 							) {
 								Icon(
@@ -410,6 +427,7 @@ private fun BluetoothDeviceList(
 								IconButton(
 									onClick = {
 										onAction(HomeAction.EditBluetoothDeviceName)
+										haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 									},
 								) {
 									Icon(
@@ -425,6 +443,7 @@ private fun BluetoothDeviceList(
 				Button(
 					onClick = {
 						onAction(HomeAction.MakeDeviceDiscoverable)
+						haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 					}
 				) {
 					Text("Make discoverable")
@@ -433,6 +452,7 @@ private fun BluetoothDeviceList(
 				Button(
 					onClick = {
 						onAction(HomeAction.OpenBluetoothSettings)
+						haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 					}
 				) {
 					Text("Bluetooth settings")
@@ -441,6 +461,7 @@ private fun BluetoothDeviceList(
 				Button(
 					onClick = {
 						onAction(HomeAction.OpenDeviceInfoSettings)
+						haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
 					}
 				) {
 					Text("Device info settings")
@@ -455,12 +476,23 @@ private fun BluetoothDeviceList(
 					verticalAlignment = Alignment.CenterVertically,
 					modifier = modifier.fillParentMaxSize(fraction = 0.6F)
 				) {
-					Text(
-						text = "Bluetooth is off.",
-						fontWeight = FontWeight.Bold,
-						fontSize = 24.sp,
-						color = Color.Red,
-					)
+					Button(
+						onClick = {
+							onAction(HomeAction.EnableBluetooth)
+							haptics.performHapticFeedback(HapticFeedbackType.ContextClick)
+						},
+					) {
+						val icon = Icons.Filled.Bluetooth
+						Icon(
+							imageVector = icon,
+							contentDescription = null,
+							modifier = Modifier
+								.offset(x = -icon.defaultWidth / 2)
+						)
+						Text(
+							text = "Enable Bluetooth",
+						)
+					}
 				}
 			}
 		}
@@ -752,7 +784,7 @@ private fun Preview() = BasePreview {
 			scannedDevices = devices.filter { !it.pairingState.isPaired },
 			isBluetoothSupported = true,
 			isScanning = true,
-			isBluetoothOn = true,
+			isBluetoothOn = false,
 			useSecureConnection = false,
 //			permissionDialog = HomeState.PermissionDialogState(
 //				title = "Permission Denied",

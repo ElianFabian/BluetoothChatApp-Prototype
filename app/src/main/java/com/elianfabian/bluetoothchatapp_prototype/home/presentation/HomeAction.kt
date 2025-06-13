@@ -24,4 +24,5 @@ sealed interface HomeAction {
 	data class CheckUseSecureConnection(val enabled: Boolean) : HomeAction
 	data class SelectTargetDeviceToMessage(val connectedDevice: BluetoothDevice) : HomeAction
 	data object SelectAllDevicesToMessage : HomeAction
+	data object EnableBluetooth : HomeAction
 }

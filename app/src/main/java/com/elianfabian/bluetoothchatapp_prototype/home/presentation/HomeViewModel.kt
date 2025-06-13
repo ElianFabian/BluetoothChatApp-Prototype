@@ -421,8 +421,13 @@ class HomeViewModel(
 			is HomeAction.SelectTargetDeviceToMessage -> {
 				_selectedDevice.value = HomeState.SelectedDevice.Device(action.connectedDevice)
 			}
-			HomeAction.SelectAllDevicesToMessage -> {
+			is HomeAction.SelectAllDevicesToMessage -> {
 				_selectedDevice.value = HomeState.SelectedDevice.AllDevices
+			}
+			is HomeAction.EnableBluetooth -> {
+				applicationScope.launch {
+					androidHelper.showEnableBluetoothDialog()
+				}
 			}
 		}
 	}
