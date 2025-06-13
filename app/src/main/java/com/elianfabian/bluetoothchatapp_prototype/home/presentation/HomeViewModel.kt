@@ -14,6 +14,8 @@ import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callba
 import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -448,12 +450,14 @@ class HomeViewModel(
 					val messages = bluetoothController.devices.value.filter {
 						it.connectionState == BluetoothDevice.ConnectionState.Connected
 					}.map { connectedDevice ->
-						val message = bluetoothController.trySendMessage(
-							address = connectedDevice.address,
-							message = messageToSend,
-						)
-						message
-					}
+						async {
+							val message = bluetoothController.trySendMessage(
+								address = connectedDevice.address,
+								message = messageToSend,
+							)
+							message
+						}
+					}.awaitAll()
 
 					if (messages.isNotEmpty() && messages.any { it != null }) {
 						_messages.update {
