@@ -258,8 +258,8 @@ class HomeViewModel(
 							}
 						}
 						if (!bluetoothController.startScan()) {
-							// In some devices, at least for API level 29, if this returns false we likely
-							// need to turn on location
+							// In some devices, at least for Xiaomi Mi MIX 2S API level 29 (for Samsung Galaxy Note 9 API level 29 this does not reproduce),
+							// if this returns false we likely need to turn on location
 							// Maybe in some cases it is not the case, we'll have to see
 							// The ideal solution would be to know in which concrete cases this is needed
 							// I think it is a combination of manufacturer and API level
