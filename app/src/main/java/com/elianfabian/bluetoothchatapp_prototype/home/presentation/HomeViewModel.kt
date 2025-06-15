@@ -20,7 +20,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
@@ -235,7 +234,7 @@ class HomeViewModel(
 		when (action) {
 			is HomeAction.StartScan -> {
 				applicationScope.launch {
-					executeIfBluetoothRequirementsAreSatisfied {
+					requestPermissionsAndEnableBluetoothBeforeExecuting {
 						if (Build.VERSION.SDK_INT < 31) {
 							val result = accessFineLocationPermissionController.request()
 							if (result == PermissionState.PermanentlyDenied) {
@@ -251,11 +250,11 @@ class HomeViewModel(
 										_permissionDialog.value = null
 									},
 								)
-								return@executeIfBluetoothRequirementsAreSatisfied
+								return@requestPermissionsAndEnableBluetoothBeforeExecuting
 							}
 							if (!result.isGranted) {
 								androidHelper.showToast("Location permission is needed to scan")
-								return@executeIfBluetoothRequirementsAreSatisfied
+								return@requestPermissionsAndEnableBluetoothBeforeExecuting
 							}
 						}
 						if (!bluetoothController.startScan()) {
@@ -279,7 +278,7 @@ class HomeViewModel(
 			}
 			is HomeAction.StartServer -> {
 				applicationScope.launch {
-					executeIfBluetoothRequirementsAreSatisfied {
+					requestPermissionsAndEnableBluetoothBeforeExecuting {
 						val result = if (_useSecureConnection.value) {
 							bluetoothController.startBluetoothServer()
 						}
@@ -426,7 +425,9 @@ class HomeViewModel(
 			}
 			is HomeAction.EnableBluetooth -> {
 				applicationScope.launch {
-					androidHelper.showEnableBluetoothDialog()
+					requestPermissionsAndEnableBluetoothBeforeExecuting {
+						// no-op, this will request the proper permissions to then enable bluetooth
+					}
 				}
 			}
 		}
@@ -509,7 +510,7 @@ class HomeViewModel(
 		}
 	}
 
-	private suspend fun executeIfBluetoothRequirementsAreSatisfied(action: suspend () -> Unit) {
+	private suspend fun requestPermissionsAndEnableBluetoothBeforeExecuting(action: suspend () -> Unit) {
 		val result = bluetoothPermissionController.request()
 		if (result.allArePermanentlyDenied) {
 			_permissionDialog.value = HomeState.PermissionDialogState(
