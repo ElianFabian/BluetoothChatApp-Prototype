@@ -18,19 +18,18 @@ import com.elianfabian.bluetoothchatapp_prototype.common.data.broadcastreceiver.
 import com.elianfabian.bluetoothchatapp_prototype.common.data.broadcastreceiver.DeviceBondStateChangeBroadcastReceiver
 import com.elianfabian.bluetoothchatapp_prototype.common.data.broadcastreceiver.DeviceFoundBroadcastReceiver
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.AndroidHelper
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothController
+import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothDevice
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.MultiplePermissionController
 import com.elianfabian.bluetoothchatapp_prototype.common.domain.PermissionState
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.ApplicationBackgroundStateChangeCallback
-import com.elianfabian.bluetoothchatapp_prototype.home.data.AndroidBluetoothDevice
-import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothController
-import com.elianfabian.bluetoothchatapp_prototype.common.domain.BluetoothDevice
 import com.elianfabian.bluetoothchatapp_prototype.common.util.simplestack.callbacks.OnCreateApplicationCallback
+import com.elianfabian.bluetoothchatapp_prototype.home.data.AndroidBluetoothDevice
 import com.zhuinden.flowcombinetuplekt.combineTuple
 import com.zhuinden.simplestack.ScopedServices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +43,6 @@ import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
@@ -105,6 +103,7 @@ class BluetoothControllerImpl(
 			).collect { (bluetoothState, permissionsState) ->
 				if (bluetoothState.isOn && permissionsState.values.all { it == PermissionState.Granted }) {
 					updateDevices()
+					_bluetoothDeviceName.value = _bluetoothAdapter?.name
 				}
 			}
 		}
