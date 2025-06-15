@@ -338,8 +338,21 @@ class BluetoothControllerImpl(
 		}
 		val adapter = _bluetoothAdapter ?: return false
 
-		// In some devices (at least on Realme 6 API 30), when you change the name and go to bluetooth settings
-		// the previous name is automatically set
+		// Not all devices support changing the Bluetooth name, and there doesn't seem to be a way to check it
+		// Here's a list of devices that I tested that support it:
+		// - Google
+		// - Motorola
+		// - Sony Xperia 10 (34)
+		// - SHARP AQUOS
+		// - ZTE
+		// - FUJITSU
+		//
+		// And here's a list of devices that I tested that don't support it:
+		// - Huawei
+		// - Xiaomi
+		// - Realme
+		// - Samsung
+		//
 		// Notes:
 		// - Bluetooth must be enabled to change the name
 		// - Immediately calling BluetoothAdapter.getName() after calling BluetoothAdapter.setName(...) won't return the new name
