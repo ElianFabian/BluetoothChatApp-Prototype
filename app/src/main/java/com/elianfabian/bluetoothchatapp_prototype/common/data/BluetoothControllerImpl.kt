@@ -269,6 +269,7 @@ class BluetoothControllerImpl(
 				println("$$$$$ BluetoothDeviceConnectionBroadcastReceiver androidDevice: $androidDevice, isConnected: $isConnected")
 				if (!isConnected) {
 					val clientSocket = _clientSocketByAddress.remove(androidDevice.address)
+					val wasConnected = clientSocket?.isConnected == true
 					println("$$$$$ clientSocket.isConnected: ${clientSocket?.isConnected}")
 
 					clientSocket?.close()
@@ -276,7 +277,8 @@ class BluetoothControllerImpl(
 					_clientJobByAddress.remove(androidDevice.address)
 					_clientSharedFlowByAddress.remove(androidDevice.address)
 
-					if (clientSocket != null) {
+					// FIX: Check if it was previously connected to avoid emitting the event when we tried to connect but it failed
+					if (wasConnected) {
 						_events.emit(
 							BluetoothController.Event.OnDeviceDisconnected(
 								disconnectedDevice = _devices.value.find { it.address == androidDevice.address } ?: run {

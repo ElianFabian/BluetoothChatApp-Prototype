@@ -234,29 +234,29 @@ class HomeViewModel(
 		when (action) {
 			is HomeAction.StartScan -> {
 				applicationScope.launch {
-					requestPermissionsAndEnableBluetoothBeforeExecuting {
-						if (Build.VERSION.SDK_INT < 31) {
-							val result = accessFineLocationPermissionController.request()
-							if (result == PermissionState.PermanentlyDenied) {
-								_permissionDialog.value = HomeState.PermissionDialogState(
-									title = "Permission Denied",
-									message = "Please, enable location permissions in settings to allow scanning.",
-									actionName = "Settings",
-									onAction = {
-										androidHelper.openAppSettings()
-										_permissionDialog.value = null
-									},
-									onDismissRequest = {
-										_permissionDialog.value = null
-									},
-								)
-								return@requestPermissionsAndEnableBluetoothBeforeExecuting
-							}
-							if (!result.isGranted) {
-								androidHelper.showToast("Location permission is needed to scan")
-								return@requestPermissionsAndEnableBluetoothBeforeExecuting
-							}
+					if (Build.VERSION.SDK_INT < 31) {
+						val result = accessFineLocationPermissionController.request()
+						if (result == PermissionState.PermanentlyDenied) {
+							_permissionDialog.value = HomeState.PermissionDialogState(
+								title = "Permission Denied",
+								message = "Please, enable location permissions in settings to allow scanning.",
+								actionName = "Settings",
+								onAction = {
+									androidHelper.openAppSettings()
+									_permissionDialog.value = null
+								},
+								onDismissRequest = {
+									_permissionDialog.value = null
+								},
+							)
+							return@launch
 						}
+						if (!result.isGranted) {
+							androidHelper.showToast("Location permission is needed to scan")
+							return@launch
+						}
+					}
+					requestPermissionsAndEnableBluetoothBeforeExecuting {
 						if (!bluetoothController.startScan()) {
 							// In some devices, at least for Xiaomi Mi MIX 2S API level 29 (for Samsung Galaxy Note 9 API level 29 this does not reproduce),
 							// if this returns false we likely need to turn on location
