@@ -131,7 +131,9 @@ class NotificationControllerImpl(
 				PendingIntent.getActivity(
 					context,
 					0,
-					Intent(context, MainActivity::class.java),
+					Intent(context, MainActivity::class.java).apply {
+						flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+					},
 					PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
 				)
 			)
@@ -239,7 +241,9 @@ class NotificationControllerImpl(
 							PendingIntent.getActivity(
 								context,
 								0,
-								Intent(context, MainActivity::class.java),
+								Intent(context, MainActivity::class.java).apply {
+									flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+								},
 								PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
 							)
 						)
