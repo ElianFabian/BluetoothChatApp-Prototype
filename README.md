@@ -1,5 +1,5 @@
 
-<img height="635x" src="https://github.com/user-attachments/assets/930c546f-1746-4a74-be52-b2bb62cd9f41" />
+<img height="500x" src="https://github.com/user-attachments/assets/930c546f-1746-4a74-be52-b2bb62cd9f41" />
 
 # BluetoothChatApp demo
 This project is a demo to show the capabilities and challenges of working with Bluetooth Classic.
