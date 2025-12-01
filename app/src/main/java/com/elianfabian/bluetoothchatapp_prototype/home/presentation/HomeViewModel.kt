@@ -52,9 +52,9 @@ class HomeViewModel(
 			postNotificationsPermissionController.request()
 		}
 
-		_messages.update { devices ->
-			devices.map { device ->
-				device.copy(isRead = true)
+		_messages.update { messages ->
+			messages.map { message ->
+				message.copy(isRead = true)
 			}
 		}
 
@@ -98,7 +98,6 @@ class HomeViewModel(
 							bluetoothController.listenMessagesFrom(event.connectedDevice.address).collect { message ->
 
 								// Little delay for to allow the UI finish the linear progress animation.
-								bluetoothController.loadingClients.filter { it.isEmpty() }
 								if (message.content.length > 75_000) {
 									delay(175)
 								}
