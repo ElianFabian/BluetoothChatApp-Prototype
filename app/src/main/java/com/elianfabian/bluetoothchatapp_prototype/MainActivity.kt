@@ -47,6 +47,8 @@ class MainActivity : FragmentActivity() {
 
 		enableEdgeToEdge()
 
+		onBackPressedDispatcher.addCallback(backPressedCallback)
+
 		// On some devices (at least on POCO F5 Pro API 35) the navbar is not completely transparent, this way we can force it
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 			window.isNavigationBarContrastEnforced = false
