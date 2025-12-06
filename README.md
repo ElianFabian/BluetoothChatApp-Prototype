@@ -105,6 +105,8 @@ These are some things I've tested:
 - Sending messages over ~60 meters with no obstacles
 - Connecting 4 devices all at once
 (Didn't have more devices to test their actual limit. Theoretical maximum is 7)
+- When 2 devices are paired, but one of them removes the other from their paired devices list when they try to connect it will fail, also trying to pair will fail, the one who didn't unpair has to do it to allow to connect again.
+  Also when this happens, the device that still preserves the other in its paired devices list it will appear when scanning for new devices (this doesn't happen with truly paired devices).
 
 
 If you find any issues or bugs, feel free to open an issue.
